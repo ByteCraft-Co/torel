@@ -10,6 +10,7 @@ rust-version.workspace = true
 clap.workspace = true
 torel_backend.workspace = true
 torel_codegen.workspace = true
+torel_codegen_c.workspace = true
 torel_codegen_llvm.workspace = true
 torel_diagnostics.workspace = true
 torel_effects.workspace = true

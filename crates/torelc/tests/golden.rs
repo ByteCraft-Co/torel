@@ -77,6 +77,17 @@ fn assert_success(path: &str) {
     );
 }
 
+fn assert_backend_reserved(emit: &str, expected: &str) {
+    let output = run_torelc(&["examples/hello.torel", "--emit", emit]);
+    let stderr = stderr(&output);
+
+    assert!(!output.status.success(), "--emit {emit} should be reserved");
+    assert!(
+        stderr.starts_with(expected),
+        "stderr should start with expected message\nexpected:\n{expected}\nactual:\n{stderr}"
+    );
+}
+
 #[test]
 fn emits_tokens_golden() {
     assert_emit_matches_golden(
@@ -123,6 +134,23 @@ fn emits_check_golden() {
     assert_emit_matches_golden(
         "check",
         include_str!("../../../tests/golden/hello.check.txt"),
+    );
+}
+
+#[test]
+fn rejects_reserved_backend_targets() {
+    assert_backend_reserved(
+        "llvm-ir",
+        "error: UnsupportedTarget: C++ LLVM bridge is reserved but not built in this toolchain",
+    );
+    assert_backend_reserved("c", "error: UnsupportedTarget: C debug backend is reserved");
+    assert_backend_reserved(
+        "object",
+        "error: UnsupportedTarget: object and executable emission require the verified C++ LLVM bridge",
+    );
+    assert_backend_reserved(
+        "executable",
+        "error: UnsupportedTarget: object and executable emission require the verified C++ LLVM bridge",
     );
 }
 

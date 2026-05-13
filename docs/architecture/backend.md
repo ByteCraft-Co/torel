@@ -50,6 +50,18 @@ The Rust backend trait accepts `MirModule` and a target:
 
 Every backend must validate MIR before emission or require a caller-owned validated wrapper once MIR stabilizes. Structured backend errors carry a kind, message, and optional Torel source span.
 
+## CLI Targets
+
+The CLI now reserves backend-facing targets:
+
+- `--emit mir`: implemented textual MIR
+- `--emit c`: reserved C debug backend
+- `--emit llvm-ir`: reserved C++ LLVM backend
+- `--emit object`: reserved native object output
+- `--emit executable`: reserved native executable output
+
+Reserved targets still run the Rust frontend, semantic checks, effect/failure/ownership placeholders, MIR lowering, and MIR validation before returning structured backend errors.
+
 ## Sacred Rule
 
 LLVM and MLIR must never become the frontend semantic model. They are output details. Torel semantics live in Rust-owned IR and MIR.

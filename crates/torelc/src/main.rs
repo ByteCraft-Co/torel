@@ -3,6 +3,7 @@ use std::{fs, path::PathBuf};
 use clap::{Parser, ValueEnum};
 use torel_backend::{Backend, BackendTarget};
 use torel_codegen::{CodegenTarget, codegen};
+use torel_codegen_c::CDebugBackend;
 use torel_codegen_llvm::LlvmBackend;
 use torel_diagnostics::FileId;
 use torel_effects::{check_effects, check_failures};
@@ -33,7 +34,10 @@ enum Emit {
     Hir,
     Typed,
     Mir,
+    C,
     LlvmIr,
+    Object,
+    Executable,
 }
 
 fn main() {
@@ -55,7 +59,15 @@ fn run() -> Result<(), String> {
                 println!("{:?} {:?}", token.span, token.kind);
             }
         }
-        Emit::Check | Emit::Ast | Emit::Hir | Emit::Typed | Emit::Mir | Emit::LlvmIr => {
+        Emit::Check
+        | Emit::Ast
+        | Emit::Hir
+        | Emit::Typed
+        | Emit::Mir
+        | Emit::C
+        | Emit::LlvmIr
+        | Emit::Object
+        | Emit::Executable => {
             let ast = parse_source_file(&tokens)
                 .map_err(|err| render_diagnostic(&source_file, &err.into_diagnostic()))?;
 
@@ -90,10 +102,20 @@ fn run() -> Result<(), String> {
                 return Ok(());
             }
 
-            if matches!(cli.emit, Emit::LlvmIr) {
-                let output = LlvmBackend
-                    .emit(&mir, BackendTarget::LlvmIr)
-                    .map_err(format_error)?;
+            if matches!(
+                cli.emit,
+                Emit::C | Emit::LlvmIr | Emit::Object | Emit::Executable
+            ) {
+                let (backend, target): (&dyn Backend, BackendTarget) = match cli.emit {
+                    Emit::C => (&CDebugBackend, BackendTarget::C),
+                    Emit::LlvmIr => (&LlvmBackend, BackendTarget::LlvmIr),
+                    Emit::Object => (&LlvmBackend, BackendTarget::Object),
+                    Emit::Executable => (&LlvmBackend, BackendTarget::Executable),
+                    _ => unreachable!("backend emission is handled only for backend targets"),
+                };
+                let output = backend
+                    .emit(&mir, target)
+                    .map_err(|err| render_diagnostic(&source_file, &err.to_diagnostic()))?;
 
                 if let Some(text) = output.text {
                     print!("{text}");

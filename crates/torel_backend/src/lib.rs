@@ -1,5 +1,5 @@
 use thiserror::Error;
-use torel_diagnostics::Span;
+use torel_diagnostics::{Diagnostic, Label, Span};
 use torel_mir::{MirModule, validate_module};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,6 +69,17 @@ impl BackendError {
     pub fn with_span(mut self, span: Span) -> Self {
         self.span = Some(span);
         self
+    }
+
+    #[must_use]
+    pub fn to_diagnostic(&self) -> Diagnostic {
+        let diagnostic = Diagnostic::error(self.to_string());
+
+        if let Some(span) = self.span {
+            diagnostic.with_label(Label::primary(span, "backend error"))
+        } else {
+            diagnostic
+        }
     }
 }
 

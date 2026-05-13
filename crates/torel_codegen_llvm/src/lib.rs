@@ -26,11 +26,11 @@ impl Backend for LlvmBackend {
             )),
             BackendTarget::LlvmIr => Err(BackendError::new(
                 BackendErrorKind::UnsupportedTarget,
-                "C++ LLVM bridge is reserved; textual LLVM emission lands after MIR lowering is wired",
+                "C++ LLVM bridge is reserved but not built in this toolchain; install LLVM and build the bridge before emitting verified LLVM IR",
             )),
             BackendTarget::Object | BackendTarget::Executable => Err(BackendError::new(
                 BackendErrorKind::UnsupportedTarget,
-                "object and executable emission wait for verified LLVM IR",
+                "object and executable emission require the verified C++ LLVM bridge",
             )),
             BackendTarget::C => Err(BackendError::new(
                 BackendErrorKind::UnsupportedTarget,

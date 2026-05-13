@@ -11,6 +11,19 @@ LLVM is Torel's first serious native target. It must remain behind MIR.
 - run LLVM verification
 - return verified LLVM IR
 
+## Current Repository State
+
+The Rust crate `torel_codegen_llvm` validates MIR and exposes structured backend errors. Its `cpp/` directory contains the C++ bridge boundary and subsystem layout for LLVM emission, but the bridge is intentionally not wired into Cargo until LLVM and a C++ compiler are available in the build environment.
+
+Today:
+
+- `--emit mir` is implemented
+- `--emit llvm-ir` validates MIR, then fails honestly with a structured unsupported-target error
+- `--emit object` and `--emit executable` are reserved behind verified LLVM IR
+- C++ bridge stubs define the ownership/error boundary and engine-room subsystems
+
+The first future LLVM implementation must replace the reserved error with C++ emission plus LLVM verification.
+
 ## Phase 2: Target Configuration
 
 - target triple

@@ -301,6 +301,7 @@ dependencies = [
  "thiserror",
  "torel_backend",
  "torel_codegen",
+ "torel_codegen_c",
  "torel_codegen_llvm",
  "torel_diagnostics",
  "torel_effects",

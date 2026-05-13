@@ -26,7 +26,7 @@ impl Backend for CDebugBackend {
             )),
             BackendTarget::C => Err(BackendError::new(
                 BackendErrorKind::UnsupportedTarget,
-                "C debug backend is reserved until MIR lowering exposes a supported primitive subset",
+                "C debug backend is reserved; MIR is available today with --emit mir",
             )),
             BackendTarget::LlvmIr | BackendTarget::Object | BackendTarget::Executable => {
                 Err(BackendError::new(
