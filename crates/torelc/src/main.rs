@@ -2,11 +2,13 @@ use std::{fs, path::PathBuf};
 
 use clap::{Parser, ValueEnum};
 use torel_codegen::{CodegenTarget, codegen};
+use torel_diagnostics::FileId;
 use torel_effects::{check_effects, check_failures};
 use torel_ir::lower_ast;
 use torel_lexer::lex;
 use torel_ownership::check_ownership;
 use torel_parse::parse_source_file;
+use torel_session::{SourceFile, render_diagnostic};
 use torel_typeck::check_types;
 
 #[derive(Debug, Parser)]
@@ -31,15 +33,16 @@ enum Emit {
 
 fn main() {
     if let Err(err) = run() {
-        eprintln!("error: {err}");
+        eprint!("{err}");
         std::process::exit(1);
     }
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn run() -> Result<(), String> {
     let cli = Cli::parse();
-    let source = fs::read_to_string(&cli.input)?;
-    let tokens = lex(&source);
+    let source = fs::read_to_string(&cli.input).map_err(format_error)?;
+    let source_file = SourceFile::new(FileId(0), cli.input.clone(), source);
+    let tokens = lex(&source_file.text);
 
     match cli.emit {
         Emit::Tokens => {
@@ -48,7 +51,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Emit::Check | Emit::Ast | Emit::Hir | Emit::LlvmIr => {
-            let ast = parse_source_file(&tokens)?;
+            let ast = parse_source_file(&tokens)
+                .map_err(|err| render_diagnostic(&source_file, &err.into_diagnostic()))?;
 
             if matches!(cli.emit, Emit::Ast) {
                 println!("{ast:#?}");
@@ -62,15 +66,16 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
 
-            let typed = check_types(&hir)?;
-            let effects = check_effects(&typed)?;
-            let failures = check_failures(&typed)?;
-            let ownership = check_ownership(&typed)?;
+            let typed = check_types(&hir)
+                .map_err(|err| render_diagnostic(&source_file, &err.to_diagnostic()))?;
+            let effects = check_effects(&typed).map_err(format_error)?;
+            let failures = check_failures(&typed).map_err(format_error)?;
+            let ownership = check_ownership(&typed).map_err(format_error)?;
             let target = match cli.emit {
                 Emit::LlvmIr => CodegenTarget::LlvmIr,
                 _ => CodegenTarget::CheckOnly,
             };
-            let output = codegen(&typed, target)?;
+            let output = codegen(&typed, target).map_err(format_error)?;
 
             println!("{}", output.text);
             println!(
@@ -87,4 +92,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn format_error(err: impl std::fmt::Display) -> String {
+    format!("error: {err}\n")
 }

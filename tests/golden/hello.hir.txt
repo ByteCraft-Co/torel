@@ -9,24 +9,60 @@ HirModule {
         HirProc {
             visibility: Export,
             name: "main",
+            name_span: Span {
+                start: 34,
+                end: 38,
+            },
             params: [],
             return_type: HirTypeRef {
-                path: [
-                    "Exit",
-                ],
+                path: HirPath {
+                    segments: [
+                        "Exit",
+                    ],
+                    span: Span {
+                        start: 44,
+                        end: 48,
+                    },
+                },
             },
             body: HirBlock {
                 stmts: [
-                    Return(
-                        Path(
-                            [
-                                "Exit",
-                                "ok",
-                            ],
+                    HirStmt {
+                        kind: Return(
+                            HirExpr {
+                                kind: Path(
+                                    HirPath {
+                                        segments: [
+                                            "Exit",
+                                            "ok",
+                                        ],
+                                        span: Span {
+                                            start: 62,
+                                            end: 69,
+                                        },
+                                    },
+                                ),
+                                span: Span {
+                                    start: 62,
+                                    end: 69,
+                                },
+                            },
                         ),
-                    ),
+                        span: Span {
+                            start: 55,
+                            end: 70,
+                        },
+                    },
                 ],
                 tail: None,
+                span: Span {
+                    start: 49,
+                    end: 72,
+                },
+            },
+            span: Span {
+                start: 29,
+                end: 72,
             },
         },
     ],

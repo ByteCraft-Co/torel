@@ -8,3 +8,4 @@ rust-version.workspace = true
 
 [dependencies]
 torel_ast.workspace = true
+torel_diagnostics.workspace = true

@@ -45,9 +45,21 @@ fn assert_emit_matches_golden(emit: &str, expected: &str) {
 
 fn assert_failure(path: &str, expected: &str) {
     let output = run_torelc(&[path, "--emit", "check"]);
+    let stderr = stderr(&output);
 
     assert!(!output.status.success(), "{path} should fail");
-    assert_eq!(stderr(&output), expected);
+    assert!(
+        stderr.starts_with(expected),
+        "stderr should start with expected message\nexpected:\n{expected}\nactual:\n{stderr}"
+    );
+    assert!(
+        stderr.contains(" --> "),
+        "stderr should include a source location\nactual:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("  |"),
+        "stderr should include a source underline\nactual:\n{stderr}"
+    );
 }
 
 #[test]
@@ -308,7 +320,7 @@ fn checks_valid_final_expr_if_with_returns_fixture() {
 fn rejects_trailing_junk_fixture() {
     assert_failure(
         "tests/fixtures/invalid/trailing_junk.torel",
-        "error: expected top-level item at 30..31\n",
+        "error: expected top-level item\n",
     );
 }
 
@@ -508,6 +520,6 @@ fn rejects_final_expr_branch_mismatch() {
 fn rejects_statement_after_final_expr() {
     assert_failure(
         "tests/fixtures/invalid/statement_after_final_expr.torel",
-        "error: expected token `RBrace` at 84..90\n",
+        "error: expected token `RBrace`\n",
     );
 }

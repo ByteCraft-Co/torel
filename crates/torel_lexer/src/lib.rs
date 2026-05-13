@@ -1,8 +1,4 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Span {
-    pub start: usize,
-    pub end: usize,
-}
+pub use torel_diagnostics::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Token<'src> {

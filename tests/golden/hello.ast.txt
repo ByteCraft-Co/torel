@@ -1,35 +1,82 @@
 SourceFile {
     unit: Some(
         UnitDecl {
-            path: [
-                "examples",
-                "hello",
-            ],
+            path: Path {
+                segments: [
+                    "examples",
+                    "hello",
+                ],
+                span: Span {
+                    start: 5,
+                    end: 19,
+                },
+            },
+            span: Span {
+                start: 0,
+                end: 20,
+            },
         },
     ),
     items: [
         Proc(
             ProcDecl {
                 visibility: Export,
+                visibility_span: None,
                 name: "main",
+                name_span: Span {
+                    start: 34,
+                    end: 38,
+                },
                 params: [],
                 return_type: TypeRef {
-                    path: [
-                        "Exit",
-                    ],
+                    path: Path {
+                        segments: [
+                            "Exit",
+                        ],
+                        span: Span {
+                            start: 44,
+                            end: 48,
+                        },
+                    },
                 },
                 body: Block {
                     stmts: [
-                        Return(
-                            Path(
-                                [
-                                    "Exit",
-                                    "ok",
-                                ],
+                        Stmt {
+                            kind: Return(
+                                Expr {
+                                    kind: Path(
+                                        Path {
+                                            segments: [
+                                                "Exit",
+                                                "ok",
+                                            ],
+                                            span: Span {
+                                                start: 62,
+                                                end: 69,
+                                            },
+                                        },
+                                    ),
+                                    span: Span {
+                                        start: 62,
+                                        end: 69,
+                                    },
+                                },
                             ),
-                        ),
+                            span: Span {
+                                start: 55,
+                                end: 70,
+                            },
+                        },
                     ],
                     tail: None,
+                    span: Span {
+                        start: 49,
+                        end: 72,
+                    },
+                },
+                span: Span {
+                    start: 29,
+                    end: 72,
                 },
             },
         ),

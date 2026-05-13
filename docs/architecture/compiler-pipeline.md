@@ -27,6 +27,7 @@ source
 | HIR | `torel_ir` | Lower syntax into compiler-owned semantic structures. |
 | Name resolution / typed IR | `torel_typeck` / `torel_ir` | Resolve names to stable IDs and produce typed IR. |
 | Type checking | `torel_typeck` | Validate declared types, expression types, and returns. |
+| Diagnostics | `torel_diagnostics` / `torel_session` | Preserve source spans, map bytes to line/column locations, and render source-labelled errors. |
 | Effect/failure checking | `torel_effects` | Validate declared effects and checked failure channels. |
 | Ownership checking | `torel_ownership` | Enforce ownership, moves, views, and arena escape rules. |
 | Code generation | `torel_codegen` | Lower checked IR toward LLVM and later MLIR/LLVM. |
@@ -37,6 +38,7 @@ The pipeline is executable but intentionally skeletal:
 
 - the lexer recognizes the first core tokens needed by examples
 - the parser accepts a `unit` declaration, the first top-level `proc` shape, `fix`/`slot` bindings, assignment statements, `if`/`else` statements, returns, final block expressions, paths, literals, and procedure calls
+- AST, HIR, and typed IR preserve source spans for diagnostic reporting
 - HIR preserves unit identity and procedure structure
 - type checking has built-in symbols for `Exit`, `Void`, `Bool`, `Int32`, `UInt64`, `Text`, `Never`, and `Exit.ok`
 - typed IR records resolved type IDs, value IDs, proc IDs, and local IDs
@@ -47,6 +49,7 @@ The pipeline is executable but intentionally skeletal:
 - `if`/`else` statements require `Bool` conditions, type-check branch blocks, keep branch-local bindings scoped to their branch, and participate in guaranteed-return analysis
 - block tail expressions type-check as procedure results and let a block complete with a value without an explicit `return`
 - the first semantic checks reject unknown types, unknown locals, duplicate locals, assignment to immutable locals, invalid assignment targets, bad assignment values, non-`Bool` conditions, unknown value paths, unknown procedure calls, non-callable values, bad argument counts, bad argument types, bare procedure values, bad local initializers, bad explicit and final-expression return types, and missing guaranteed returns from non-`Void` procedures
+- parser and type-checking errors render with file, line, column, source text, and an underline label
 - type/effect/failure/ownership stages return reports
 - codegen supports a check-only summary and reserves LLVM IR for the next backend phase
 

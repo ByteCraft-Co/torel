@@ -9,10 +9,12 @@ rust-version.workspace = true
 [dependencies]
 clap.workspace = true
 torel_codegen.workspace = true
+torel_diagnostics.workspace = true
 torel_effects.workspace = true
 torel_ir.workspace = true
 torel_lexer.workspace = true
 torel_ownership.workspace = true
 torel_parse.workspace = true
+torel_session.workspace = true
 torel_typeck.workspace = true
 thiserror.workspace = true

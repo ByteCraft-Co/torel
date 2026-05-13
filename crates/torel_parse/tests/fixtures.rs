@@ -7,7 +7,7 @@ fn parses_minimal_unit_fixture() {
     let file = parse_source_file(&tokens).expect("fixture should parse");
 
     assert_eq!(
-        file.unit.expect("unit declaration").path,
+        file.unit.expect("unit declaration").path.segments,
         vec!["fixtures".to_owned(), "minimal".to_owned()]
     );
 }

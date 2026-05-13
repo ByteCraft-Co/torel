@@ -181,6 +181,9 @@ dependencies = [
 [[package]]
 name = "torel_ast"
 version = "0.1.0"
+dependencies = [
+ "torel_diagnostics",
+]
 
 [[package]]
 name = "torel_codegen"
@@ -207,11 +210,15 @@ name = "torel_ir"
 version = "0.1.0"
 dependencies = [
  "torel_ast",
+ "torel_diagnostics",
 ]
 
 [[package]]
 name = "torel_lexer"
 version = "0.1.0"
+dependencies = [
+ "torel_diagnostics",
+]
 
 [[package]]
 name = "torel_ownership"
@@ -226,18 +233,23 @@ name = "torel_parse"
 version = "0.1.0"
 dependencies = [
  "torel_ast",
+ "torel_diagnostics",
  "torel_lexer",
 ]
 
 [[package]]
 name = "torel_session"
 version = "0.1.0"
+dependencies = [
+ "torel_diagnostics",
+]
 
 [[package]]
 name = "torel_typeck"
 version = "0.1.0"
 dependencies = [
  "thiserror",
+ "torel_diagnostics",
  "torel_ir",
 ]
 
@@ -248,11 +260,13 @@ dependencies = [
  "clap",
  "thiserror",
  "torel_codegen",
+ "torel_diagnostics",
  "torel_effects",
  "torel_ir",
  "torel_lexer",
  "torel_ownership",
  "torel_parse",
+ "torel_session",
  "torel_typeck",
 ]
 

@@ -1,4 +1,8 @@
-use torel_ast::{BindingKind, Block, Expr, Item, ProcDecl, SourceFile, Stmt, TypeRef, Visibility};
+use torel_ast::{
+    BindingKind, Block, Expr, ExprKind, Item, Path, ProcDecl, SourceFile, Stmt, StmtKind, TypeRef,
+    Visibility,
+};
+use torel_diagnostics::Span;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HirModule {
@@ -36,26 +40,36 @@ pub struct LocalId(pub u32);
 pub struct HirProc {
     pub visibility: HirVisibility,
     pub name: String,
+    pub name_span: Span,
     pub params: Vec<HirParam>,
     pub return_type: HirTypeRef,
     pub body: HirBlock,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HirParam {
     pub name: String,
+    pub name_span: Span,
     pub ty: HirTypeRef,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HirTypeRef {
-    pub path: Vec<String>,
+    pub path: HirPath,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HirPath {
+    pub segments: Vec<String>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HirBlock {
     pub stmts: Vec<HirStmt>,
     pub tail: Option<HirExpr>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,15 +79,22 @@ pub enum HirBindingKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HirStmt {
+pub struct HirStmt {
+    pub kind: HirStmtKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HirStmtKind {
     Local {
         kind: HirBindingKind,
         name: String,
+        name_span: Span,
         ty: HirTypeRef,
         value: HirExpr,
     },
     Assign {
-        target: Vec<String>,
+        target: HirPath,
         value: HirExpr,
     },
     If {
@@ -85,15 +106,18 @@ pub enum HirStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum HirExpr {
-    Path(Vec<String>),
+pub struct HirExpr {
+    pub kind: HirExprKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HirExprKind {
+    Path(HirPath),
     Int(String),
     Text(String),
     Bool(bool),
-    Call {
-        callee: Vec<String>,
-        args: Vec<HirExpr>,
-    },
+    Call { callee: HirPath, args: Vec<HirExpr> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,15 +137,18 @@ pub struct TypedProc {
     pub id: ProcId,
     pub visibility: HirVisibility,
     pub name: String,
+    pub name_span: Span,
     pub params: Vec<TypedParam>,
     pub return_type: TypedTypeRef,
     pub body: TypedBlock,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedParam {
     pub id: LocalId,
     pub name: String,
+    pub name_span: Span,
     pub ty: TypedTypeRef,
 }
 
@@ -135,10 +162,17 @@ pub struct TypedTypeRef {
 pub struct TypedBlock {
     pub stmts: Vec<TypedStmt>,
     pub tail: Option<TypedExpr>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypedStmt {
+pub struct TypedStmt {
+    pub kind: TypedStmtKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypedStmtKind {
     Local {
         id: LocalId,
         mutability: Mutability,
@@ -159,28 +193,30 @@ pub enum TypedStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum TypedExpr {
+pub struct TypedExpr {
+    pub kind: TypedExprKind,
+    pub ty: TypeId,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypedExprKind {
     Path {
         path: Vec<String>,
-        ty: TypeId,
         resolved: ResolvedValue,
     },
     Int {
         value: String,
-        ty: TypeId,
     },
     Text {
         value: String,
-        ty: TypeId,
     },
     Bool {
         value: bool,
-        ty: TypeId,
     },
     Call {
         callee: ProcId,
         args: Vec<TypedExpr>,
-        ty: TypeId,
     },
 }
 
@@ -194,7 +230,10 @@ pub enum ResolvedValue {
 #[must_use]
 pub fn lower_ast(source_file: &SourceFile) -> HirModule {
     HirModule {
-        unit_path: source_file.unit.as_ref().map(|unit| unit.path.clone()),
+        unit_path: source_file
+            .unit
+            .as_ref()
+            .map(|unit| unit.path.segments.clone()),
         procs: source_file.items.iter().map(lower_item).collect(),
     }
 }
@@ -209,16 +248,19 @@ fn lower_proc(proc: &ProcDecl) -> HirProc {
     HirProc {
         visibility: lower_visibility(proc.visibility),
         name: proc.name.clone(),
+        name_span: proc.name_span,
         params: proc
             .params
             .iter()
             .map(|param| HirParam {
                 name: param.name.clone(),
+                name_span: param.name_span,
                 ty: lower_type_ref(&param.ty),
             })
             .collect(),
         return_type: lower_type_ref(&proc.return_type),
         body: lower_block(&proc.body),
+        span: proc.span,
     }
 }
 
@@ -231,7 +273,14 @@ fn lower_visibility(visibility: Visibility) -> HirVisibility {
 
 fn lower_type_ref(ty: &TypeRef) -> HirTypeRef {
     HirTypeRef {
-        path: ty.path.clone(),
+        path: lower_path(&ty.path),
+    }
+}
+
+fn lower_path(path: &Path) -> HirPath {
+    HirPath {
+        segments: path.segments.clone(),
+        span: path.span,
     }
 }
 
@@ -239,36 +288,44 @@ fn lower_block(block: &Block) -> HirBlock {
     HirBlock {
         stmts: block.stmts.iter().map(lower_stmt).collect(),
         tail: block.tail.as_ref().map(lower_expr),
+        span: block.span,
     }
 }
 
 fn lower_stmt(stmt: &Stmt) -> HirStmt {
-    match stmt {
-        Stmt::Local {
+    let kind = match &stmt.kind {
+        StmtKind::Local {
             kind,
             name,
+            name_span,
             ty,
             value,
-        } => HirStmt::Local {
+        } => HirStmtKind::Local {
             kind: lower_binding_kind(*kind),
             name: name.clone(),
+            name_span: *name_span,
             ty: lower_type_ref(ty),
             value: lower_expr(value),
         },
-        Stmt::Assign { target, value } => HirStmt::Assign {
-            target: target.clone(),
+        StmtKind::Assign { target, value } => HirStmtKind::Assign {
+            target: lower_path(target),
             value: lower_expr(value),
         },
-        Stmt::If {
+        StmtKind::If {
             condition,
             then_block,
             else_block,
-        } => HirStmt::If {
+        } => HirStmtKind::If {
             condition: lower_expr(condition),
             then_block: lower_block(then_block),
             else_block: else_block.as_ref().map(lower_block),
         },
-        Stmt::Return(expr) => HirStmt::Return(lower_expr(expr)),
+        StmtKind::Return(expr) => HirStmtKind::Return(lower_expr(expr)),
+    };
+
+    HirStmt {
+        kind,
+        span: stmt.span,
     }
 }
 
@@ -280,14 +337,19 @@ fn lower_binding_kind(kind: BindingKind) -> HirBindingKind {
 }
 
 fn lower_expr(expr: &Expr) -> HirExpr {
-    match expr {
-        Expr::Path(path) => HirExpr::Path(path.clone()),
-        Expr::Int(value) => HirExpr::Int(value.clone()),
-        Expr::Text(value) => HirExpr::Text(value.clone()),
-        Expr::Bool(value) => HirExpr::Bool(*value),
-        Expr::Call { callee, args } => HirExpr::Call {
-            callee: callee.clone(),
+    let kind = match &expr.kind {
+        ExprKind::Path(path) => HirExprKind::Path(lower_path(path)),
+        ExprKind::Int(value) => HirExprKind::Int(value.clone()),
+        ExprKind::Text(value) => HirExprKind::Text(value.clone()),
+        ExprKind::Bool(value) => HirExprKind::Bool(*value),
+        ExprKind::Call { callee, args } => HirExprKind::Call {
+            callee: lower_path(callee),
             args: args.iter().map(lower_expr).collect(),
         },
+    };
+
+    HirExpr {
+        kind,
+        span: expr.span,
     }
 }

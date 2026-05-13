@@ -1,7 +1,8 @@
 use torel_ast::{
-    BindingKind, Block, Expr, Item, Param, ProcDecl, SourceFile, Stmt, TypeRef, UnitDecl,
-    Visibility,
+    BindingKind, Block, Expr, ExprKind, Item, Param, Path, ProcDecl, SourceFile, Stmt, StmtKind,
+    TypeRef, UnitDecl, Visibility,
 };
+use torel_diagnostics::{Diagnostic, Label};
 use torel_lexer::{Keyword, Span, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +21,19 @@ impl std::fmt::Display for ParseError {
 }
 
 impl std::error::Error for ParseError {}
+
+impl ParseError {
+    #[must_use]
+    pub fn into_diagnostic(self) -> Diagnostic {
+        let mut diagnostic = Diagnostic::error(self.message.clone());
+
+        if let Some(span) = self.span {
+            diagnostic = diagnostic.with_label(Label::primary(span, self.message));
+        }
+
+        diagnostic
+    }
+}
 
 pub fn parse_source_file(tokens: &[Token<'_>]) -> Result<SourceFile, ParseError> {
     let mut parser = Parser { tokens, cursor: 0 };
@@ -51,16 +65,14 @@ impl Parser<'_, '_> {
     }
 
     fn unit_decl(&mut self) -> Result<UnitDecl, ParseError> {
-        self.expect_keyword(Keyword::Unit)?;
-        let mut path = vec![self.expect_ident()?];
+        let start = self.expect_keyword(Keyword::Unit)?;
+        let path = self.path()?;
+        let end = self.expect(TokenKind::Semicolon)?;
 
-        while self.eat(TokenKind::Dot) {
-            path.push(self.expect_ident()?);
-        }
-
-        self.expect(TokenKind::Semicolon)?;
-
-        Ok(UnitDecl { path })
+        Ok(UnitDecl {
+            path,
+            span: start.join(end),
+        })
     }
 
     fn item(&mut self) -> Result<Item, ParseError> {
@@ -78,19 +90,23 @@ impl Parser<'_, '_> {
     }
 
     fn proc_decl(&mut self, visibility: Visibility) -> Result<ProcDecl, ParseError> {
-        self.expect_keyword(Keyword::Proc)?;
-        let name = self.expect_ident()?;
+        let start = self.expect_keyword(Keyword::Proc)?;
+        let (name, name_span) = self.expect_ident_with_span()?;
         let params = self.param_list()?;
         self.expect(TokenKind::Arrow)?;
         let return_type = self.type_ref()?;
         let body = self.block()?;
+        let span = start.join(body.span);
 
         Ok(ProcDecl {
             visibility,
+            visibility_span: None,
             name,
+            name_span,
             params,
             return_type,
             body,
+            span,
         })
     }
 
@@ -104,10 +120,14 @@ impl Parser<'_, '_> {
         let mut params = Vec::new();
 
         loop {
-            let name = self.expect_ident()?;
+            let (name, name_span) = self.expect_ident_with_span()?;
             self.expect(TokenKind::Colon)?;
             let ty = self.type_ref()?;
-            params.push(Param { name, ty });
+            params.push(Param {
+                name,
+                name_span,
+                ty,
+            });
 
             if !self.eat(TokenKind::Comma) {
                 break;
@@ -123,11 +143,20 @@ impl Parser<'_, '_> {
     }
 
     fn block(&mut self) -> Result<Block, ParseError> {
-        self.expect(TokenKind::LBrace)?;
+        let start = self.expect(TokenKind::LBrace)?;
         let mut stmts = Vec::new();
         let mut tail = None;
 
-        while !self.eat(TokenKind::RBrace) {
+        loop {
+            if self.eat(TokenKind::RBrace) {
+                let end = self.previous_span().unwrap_or(start);
+                return Ok(Block {
+                    stmts,
+                    tail,
+                    span: start.join(end),
+                });
+            }
+
             if self.at_eof() {
                 return Err(self.error_current("expected statement, final expression, or `}`"));
             }
@@ -139,53 +168,70 @@ impl Parser<'_, '_> {
 
             if self.at_expr_start() {
                 tail = Some(self.expr()?);
-                self.expect(TokenKind::RBrace)?;
-                break;
+                let end = self.expect(TokenKind::RBrace)?;
+                return Ok(Block {
+                    stmts,
+                    tail,
+                    span: start.join(end),
+                });
             }
 
             return Err(self.error_current("expected statement, final expression, or `}`"));
         }
-
-        Ok(Block { stmts, tail })
     }
 
     fn stmt(&mut self) -> Result<Stmt, ParseError> {
-        if self.eat_keyword(Keyword::Fix) {
-            self.local_stmt(BindingKind::Fix)
-        } else if self.eat_keyword(Keyword::Slot) {
-            self.local_stmt(BindingKind::Slot)
-        } else if self.eat_keyword(Keyword::If) {
-            self.if_stmt()
-        } else if self.eat_keyword(Keyword::Return) {
+        if self.at_keyword(Keyword::Fix) {
+            let start = self.expect_keyword(Keyword::Fix)?;
+            self.local_stmt(BindingKind::Fix, start)
+        } else if self.at_keyword(Keyword::Slot) {
+            let start = self.expect_keyword(Keyword::Slot)?;
+            self.local_stmt(BindingKind::Slot, start)
+        } else if self.at_keyword(Keyword::If) {
+            let start = self.expect_keyword(Keyword::If)?;
+            self.if_stmt(start)
+        } else if self.at_keyword(Keyword::Return) {
+            let start = self.expect_keyword(Keyword::Return)?;
             let expr = self.expr()?;
-            self.expect(TokenKind::Semicolon)?;
-            Ok(Stmt::Return(expr))
+            let end = self.expect(TokenKind::Semicolon)?;
+            Ok(Stmt {
+                kind: StmtKind::Return(expr),
+                span: start.join(end),
+            })
         } else {
             let target = self.path()?;
+            let start = target.span;
             self.expect(TokenKind::Equal)?;
             let value = self.expr()?;
-            self.expect(TokenKind::Semicolon)?;
-            Ok(Stmt::Assign { target, value })
+            let end = self.expect(TokenKind::Semicolon)?;
+            Ok(Stmt {
+                kind: StmtKind::Assign { target, value },
+                span: start.join(end),
+            })
         }
     }
 
-    fn local_stmt(&mut self, kind: BindingKind) -> Result<Stmt, ParseError> {
-        let name = self.expect_ident()?;
+    fn local_stmt(&mut self, kind: BindingKind, start: Span) -> Result<Stmt, ParseError> {
+        let (name, name_span) = self.expect_ident_with_span()?;
         self.expect(TokenKind::Colon)?;
         let ty = self.type_ref()?;
         self.expect(TokenKind::Equal)?;
         let value = self.expr()?;
-        self.expect(TokenKind::Semicolon)?;
+        let end = self.expect(TokenKind::Semicolon)?;
 
-        Ok(Stmt::Local {
-            kind,
-            name,
-            ty,
-            value,
+        Ok(Stmt {
+            kind: StmtKind::Local {
+                kind,
+                name,
+                name_span,
+                ty,
+                value,
+            },
+            span: start.join(end),
         })
     }
 
-    fn if_stmt(&mut self) -> Result<Stmt, ParseError> {
+    fn if_stmt(&mut self, start: Span) -> Result<Stmt, ParseError> {
         let condition = self.expr()?;
         let then_block = self.block()?;
         let else_block = if self.eat_keyword(Keyword::Else) {
@@ -193,11 +239,18 @@ impl Parser<'_, '_> {
         } else {
             None
         };
+        let end = else_block
+            .as_ref()
+            .map(|block| block.span)
+            .unwrap_or(then_block.span);
 
-        Ok(Stmt::If {
-            condition,
-            then_block,
-            else_block,
+        Ok(Stmt {
+            kind: StmtKind::If {
+                condition,
+                then_block,
+                else_block,
+            },
+            span: start.join(end),
         })
     }
 
@@ -205,39 +258,61 @@ impl Parser<'_, '_> {
         match self.peek() {
             Some(TokenKind::Int(value)) => {
                 let value = (*value).to_owned();
+                let span = self.current_span().expect("current token should have span");
                 self.cursor += 1;
-                return Ok(Expr::Int(value));
+                return Ok(Expr {
+                    kind: ExprKind::Int(value),
+                    span,
+                });
             }
             Some(TokenKind::Text(value)) => {
                 let value = (*value).to_owned();
+                let span = self.current_span().expect("current token should have span");
                 self.cursor += 1;
-                return Ok(Expr::Text(value));
+                return Ok(Expr {
+                    kind: ExprKind::Text(value),
+                    span,
+                });
             }
             Some(TokenKind::Keyword(Keyword::True)) => {
+                let span = self.current_span().expect("current token should have span");
                 self.cursor += 1;
-                return Ok(Expr::Bool(true));
+                return Ok(Expr {
+                    kind: ExprKind::Bool(true),
+                    span,
+                });
             }
             Some(TokenKind::Keyword(Keyword::False)) => {
+                let span = self.current_span().expect("current token should have span");
                 self.cursor += 1;
-                return Ok(Expr::Bool(false));
+                return Ok(Expr {
+                    kind: ExprKind::Bool(false),
+                    span,
+                });
             }
             _ => {}
         }
 
         let path = self.path()?;
         if self.eat(TokenKind::LParen) {
-            Ok(Expr::Call {
-                callee: path,
-                args: self.arg_list()?,
+            let (args, end) = self.arg_list()?;
+            let span = path.span.join(end);
+            Ok(Expr {
+                kind: ExprKind::Call { callee: path, args },
+                span,
             })
         } else {
-            Ok(Expr::Path(path))
+            Ok(Expr {
+                span: path.span,
+                kind: ExprKind::Path(path),
+            })
         }
     }
 
-    fn arg_list(&mut self) -> Result<Vec<Expr>, ParseError> {
+    fn arg_list(&mut self) -> Result<(Vec<Expr>, Span), ParseError> {
         if self.eat(TokenKind::RParen) {
-            return Ok(Vec::new());
+            let end = self.previous_span().expect("right paren should have span");
+            return Ok((Vec::new(), end));
         }
 
         let mut args = Vec::new();
@@ -250,18 +325,25 @@ impl Parser<'_, '_> {
             }
         }
 
-        self.expect(TokenKind::RParen)?;
-        Ok(args)
+        let end = self.expect(TokenKind::RParen)?;
+        Ok((args, end))
     }
 
-    fn path(&mut self) -> Result<Vec<String>, ParseError> {
-        let mut path = vec![self.expect_ident()?];
+    fn path(&mut self) -> Result<Path, ParseError> {
+        let (first, start) = self.expect_ident_with_span()?;
+        let mut segments = vec![first];
+        let mut end = start;
 
         while self.eat(TokenKind::Dot) {
-            path.push(self.expect_ident()?);
+            let (segment, span) = self.expect_ident_with_span()?;
+            segments.push(segment);
+            end = span;
         }
 
-        Ok(path)
+        Ok(Path {
+            segments,
+            span: start.join(end),
+        })
     }
 
     fn at_stmt_start(&self) -> bool {
@@ -331,28 +413,33 @@ impl Parser<'_, '_> {
         }
     }
 
-    fn expect_keyword(&mut self, keyword: Keyword) -> Result<(), ParseError> {
+    fn expect_keyword(&mut self, keyword: Keyword) -> Result<Span, ParseError> {
         if self.eat_keyword(keyword) {
-            Ok(())
+            Ok(self
+                .previous_span()
+                .expect("expected keyword should have span"))
         } else {
             Err(self.error_current(format!("expected keyword `{keyword:?}`")))
         }
     }
 
-    fn expect_ident(&mut self) -> Result<String, ParseError> {
+    fn expect_ident_with_span(&mut self) -> Result<(String, Span), ParseError> {
         match self.peek() {
             Some(TokenKind::Ident(name)) => {
                 let name = (*name).to_owned();
+                let span = self.current_span().expect("current token should have span");
                 self.cursor += 1;
-                Ok(name)
+                Ok((name, span))
             }
             _ => Err(self.error_current("expected identifier")),
         }
     }
 
-    fn expect(&mut self, kind: TokenKind<'_>) -> Result<(), ParseError> {
+    fn expect(&mut self, kind: TokenKind<'_>) -> Result<Span, ParseError> {
         if self.eat(kind.clone()) {
-            Ok(())
+            Ok(self
+                .previous_span()
+                .expect("expected token should have span"))
         } else {
             Err(self.error_current(format!("expected token `{kind:?}`")))
         }
@@ -379,6 +466,13 @@ impl Parser<'_, '_> {
         self.tokens.get(self.cursor).map(|token| token.span)
     }
 
+    fn previous_span(&self) -> Option<Span> {
+        self.cursor
+            .checked_sub(1)
+            .and_then(|cursor| self.tokens.get(cursor))
+            .map(|token| token.span)
+    }
+
     fn error_current(&self, message: impl Into<String>) -> ParseError {
         ParseError {
             message: message.into(),
@@ -398,7 +492,7 @@ mod tests {
         let file = parse_source_file(&tokens).expect("source file should parse");
 
         assert_eq!(
-            file.unit.expect("unit decl").path,
+            file.unit.expect("unit decl").path.segments,
             vec!["app".to_owned(), "server".to_owned()]
         );
     }
@@ -418,7 +512,7 @@ mod tests {
         let Item::Proc(proc) = &file.items[0];
         assert_eq!(proc.visibility, Visibility::Export);
         assert_eq!(proc.name, "main");
-        assert_eq!(proc.return_type.path, vec!["Exit".to_owned()]);
+        assert_eq!(proc.return_type.path.segments, vec!["Exit".to_owned()]);
         assert_eq!(proc.body.stmts.len(), 1);
         assert_eq!(proc.body.tail, None);
     }
@@ -440,11 +534,15 @@ mod tests {
 
         assert_eq!(file.items.len(), 2);
         let Item::Proc(proc) = &file.items[1];
-        let Stmt::Return(Expr::Call { callee, args }) = &proc.body.stmts[0] else {
+        let StmtKind::Return(Expr {
+            kind: ExprKind::Call { callee, args },
+            ..
+        }) = &proc.body.stmts[0].kind
+        else {
             panic!("main should return a call expression");
         };
 
-        assert_eq!(callee, &vec!["make_exit".to_owned()]);
+        assert_eq!(callee.segments, vec!["make_exit".to_owned()]);
         assert!(args.is_empty());
     }
 
@@ -461,20 +559,21 @@ mod tests {
         let file = parse_source_file(&tokens).expect("source file should parse");
 
         let Item::Proc(proc) = &file.items[0];
-        let Stmt::Local {
+        let StmtKind::Local {
             kind,
             name,
             ty,
             value,
-        } = &proc.body.stmts[0]
+            ..
+        } = &proc.body.stmts[0].kind
         else {
             panic!("first statement should be fix");
         };
 
         assert_eq!(kind, &BindingKind::Fix);
         assert_eq!(name, "answer");
-        assert_eq!(ty.path, vec!["Int32".to_owned()]);
-        assert_eq!(value, &Expr::Int("42".to_owned()));
+        assert_eq!(ty.path.segments, vec!["Int32".to_owned()]);
+        assert_eq!(value.kind, ExprKind::Int("42".to_owned()));
     }
 
     #[test]
@@ -491,17 +590,17 @@ mod tests {
         let file = parse_source_file(&tokens).expect("source file should parse");
 
         let Item::Proc(proc) = &file.items[0];
-        let Stmt::Local { kind, name, .. } = &proc.body.stmts[0] else {
+        let StmtKind::Local { kind, name, .. } = &proc.body.stmts[0].kind else {
             panic!("first statement should be slot");
         };
-        let Stmt::Assign { target, value } = &proc.body.stmts[1] else {
+        let StmtKind::Assign { target, value } = &proc.body.stmts[1].kind else {
             panic!("second statement should be assignment");
         };
 
         assert_eq!(kind, &BindingKind::Slot);
         assert_eq!(name, "answer");
-        assert_eq!(target, &vec!["answer".to_owned()]);
-        assert_eq!(value, &Expr::Int("42".to_owned()));
+        assert_eq!(target.segments, vec!["answer".to_owned()]);
+        assert_eq!(value.kind, ExprKind::Int("42".to_owned()));
     }
 
     #[test]
@@ -520,16 +619,16 @@ mod tests {
         let file = parse_source_file(&tokens).expect("source file should parse");
 
         let Item::Proc(proc) = &file.items[0];
-        let Stmt::If {
+        let StmtKind::If {
             condition,
             then_block,
             else_block,
-        } = &proc.body.stmts[0]
+        } = &proc.body.stmts[0].kind
         else {
             panic!("first statement should be if");
         };
 
-        assert_eq!(condition, &Expr::Bool(true));
+        assert_eq!(condition.kind, ExprKind::Bool(true));
         assert_eq!(then_block.stmts.len(), 1);
         assert_eq!(else_block.as_ref().expect("else block").stmts.len(), 1);
     }
@@ -549,7 +648,11 @@ mod tests {
         let Item::Proc(proc) = &file.items[0];
 
         assert_eq!(proc.body.stmts.len(), 1);
-        assert_eq!(proc.body.tail, Some(Expr::Path(vec!["answer".to_owned()])));
+        let tail = proc.body.tail.as_ref().expect("tail expression");
+        let ExprKind::Path(path) = &tail.kind else {
+            panic!("tail should be a path");
+        };
+        assert_eq!(path.segments, vec!["answer".to_owned()]);
     }
 
     #[test]

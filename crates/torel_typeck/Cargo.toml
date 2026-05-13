@@ -8,4 +8,5 @@ rust-version.workspace = true
 
 [dependencies]
 thiserror.workspace = true
+torel_diagnostics.workspace = true
 torel_ir.workspace = true

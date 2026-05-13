@@ -1,3 +1,5 @@
+use torel_diagnostics::Span;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SourceFile {
     pub unit: Option<UnitDecl>,
@@ -16,7 +18,8 @@ impl SourceFile {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UnitDecl {
-    pub path: Vec<String>,
+    pub path: Path,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,27 +36,38 @@ pub enum Visibility {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProcDecl {
     pub visibility: Visibility,
+    pub visibility_span: Option<Span>,
     pub name: String,
+    pub name_span: Span,
     pub params: Vec<Param>,
     pub return_type: TypeRef,
     pub body: Block,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Param {
     pub name: String,
+    pub name_span: Span,
     pub ty: TypeRef,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypeRef {
-    pub path: Vec<String>,
+    pub path: Path,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Path {
+    pub segments: Vec<String>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
     pub tail: Option<Expr>,
+    pub span: Span,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,15 +77,22 @@ pub enum BindingKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Stmt {
+pub struct Stmt {
+    pub kind: StmtKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StmtKind {
     Local {
         kind: BindingKind,
         name: String,
+        name_span: Span,
         ty: TypeRef,
         value: Expr,
     },
     Assign {
-        target: Vec<String>,
+        target: Path,
         value: Expr,
     },
     If {
@@ -83,13 +104,16 @@ pub enum Stmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Expr {
-    Path(Vec<String>),
+pub struct Expr {
+    pub kind: ExprKind,
+    pub span: Span,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExprKind {
+    Path(Path),
     Int(String),
     Text(String),
     Bool(bool),
-    Call {
-        callee: Vec<String>,
-        args: Vec<Expr>,
-    },
+    Call { callee: Path, args: Vec<Expr> },
 }
