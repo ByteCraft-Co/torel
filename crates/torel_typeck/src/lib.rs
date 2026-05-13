@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use thiserror::Error;
 use torel_ir::{
-    HirBlock, HirExpr, HirModule, HirParam, HirProc, HirStmt, HirTypeRef, LocalId, ProcId,
-    ResolvedValue, SymbolCounts, TypeId, TypedBlock, TypedExpr, TypedModule, TypedParam, TypedProc,
-    TypedStmt, TypedTypeRef, ValueId,
+    HirBindingKind, HirBlock, HirExpr, HirModule, HirParam, HirProc, HirStmt, HirTypeRef, LocalId,
+    Mutability, ProcId, ResolvedValue, SymbolCounts, TypeId, TypedBlock, TypedExpr, TypedModule,
+    TypedParam, TypedProc, TypedStmt, TypedTypeRef, ValueId,
 };
 
 #[derive(Debug, Error)]
@@ -33,6 +33,19 @@ pub enum TypeckError {
         expected: String,
         found: String,
     },
+
+    #[error("cannot assign to immutable local `{name}`")]
+    CannotAssignToImmutable { name: String },
+
+    #[error("assignment to `{name}` type mismatch: expected `{expected}`, found `{found}`")]
+    AssignTypeMismatch {
+        name: String,
+        expected: String,
+        found: String,
+    },
+
+    #[error("invalid assignment target `{path}`")]
+    InvalidAssignmentTarget { path: String },
 
     #[error("unknown procedure `{name}`")]
     UnknownProc { name: String },
@@ -92,6 +105,7 @@ struct ProcSymbol {
 struct LocalSymbol {
     id: LocalId,
     ty: TypeId,
+    mutability: Mutability,
 }
 
 impl SymbolTable {
@@ -267,6 +281,7 @@ fn local_map(params: &[TypedParam]) -> Result<HashMap<String, LocalSymbol>, Type
                 LocalSymbol {
                     id: param.id,
                     ty: param.ty.id,
+                    mutability: Mutability::Immutable,
                 },
             )
             .is_some()
@@ -300,14 +315,21 @@ fn check_stmt(
     stmt: &HirStmt,
 ) -> Result<TypedStmt, TypeckError> {
     match stmt {
-        HirStmt::Fix { name, ty, value } => check_fix_stmt(symbols, locals, name, ty, value),
+        HirStmt::Local {
+            kind,
+            name,
+            ty,
+            value,
+        } => check_local_stmt(symbols, locals, *kind, name, ty, value),
+        HirStmt::Assign { target, value } => check_assign_stmt(symbols, locals, target, value),
         HirStmt::Return(expr) => Ok(TypedStmt::Return(check_expr(symbols, locals, expr)?)),
     }
 }
 
-fn check_fix_stmt(
+fn check_local_stmt(
     symbols: &SymbolTable,
     locals: &mut HashMap<String, LocalSymbol>,
+    kind: HirBindingKind,
     name: &str,
     ty: &HirTypeRef,
     value: &HirExpr,
@@ -331,14 +353,68 @@ fn check_fix_stmt(
     }
 
     let id = LocalId(locals.len() as u32);
-    locals.insert(name.to_owned(), LocalSymbol { id, ty: ty.id });
+    let mutability = local_mutability(kind);
+    locals.insert(
+        name.to_owned(),
+        LocalSymbol {
+            id,
+            ty: ty.id,
+            mutability,
+        },
+    );
 
-    Ok(TypedStmt::Fix {
+    Ok(TypedStmt::Local {
         id,
+        mutability,
         name: name.to_owned(),
         ty,
         value,
     })
+}
+
+fn check_assign_stmt(
+    symbols: &SymbolTable,
+    locals: &mut HashMap<String, LocalSymbol>,
+    target: &[String],
+    value: &HirExpr,
+) -> Result<TypedStmt, TypeckError> {
+    if target.len() != 1 {
+        return Err(TypeckError::InvalidAssignmentTarget {
+            path: join_path(target),
+        });
+    }
+
+    let name = &target[0];
+    let Some(local) = locals.get(name).copied() else {
+        return Err(TypeckError::UnknownLocal { name: name.clone() });
+    };
+
+    if local.mutability == Mutability::Immutable {
+        return Err(TypeckError::CannotAssignToImmutable { name: name.clone() });
+    }
+
+    let value = check_expr(symbols, locals, value)?;
+    let found = expr_type(&value);
+
+    if found != local.ty {
+        return Err(TypeckError::AssignTypeMismatch {
+            name: name.clone(),
+            expected: symbols.type_name(local.ty),
+            found: symbols.type_name(found),
+        });
+    }
+
+    Ok(TypedStmt::Assign {
+        target: local.id,
+        value,
+    })
+}
+
+fn local_mutability(kind: HirBindingKind) -> Mutability {
+    match kind {
+        HirBindingKind::Fix => Mutability::Immutable,
+        HirBindingKind::Slot => Mutability::Mutable,
+    }
 }
 
 fn check_expr(

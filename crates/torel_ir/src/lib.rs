@@ -1,4 +1,4 @@
-use torel_ast::{Block, Expr, Item, ProcDecl, SourceFile, Stmt, TypeRef, Visibility};
+use torel_ast::{BindingKind, Block, Expr, Item, ProcDecl, SourceFile, Stmt, TypeRef, Visibility};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HirModule {
@@ -57,11 +57,22 @@ pub struct HirBlock {
     pub stmts: Vec<HirStmt>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HirBindingKind {
+    Fix,
+    Slot,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HirStmt {
-    Fix {
+    Local {
+        kind: HirBindingKind,
         name: String,
         ty: HirTypeRef,
+        value: HirExpr,
+    },
+    Assign {
+        target: Vec<String>,
         value: HirExpr,
     },
     Return(HirExpr),
@@ -83,6 +94,12 @@ pub enum HirExpr {
 pub enum HirVisibility {
     Private,
     Export,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mutability {
+    Immutable,
+    Mutable,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -115,10 +132,15 @@ pub struct TypedBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypedStmt {
-    Fix {
+    Local {
         id: LocalId,
+        mutability: Mutability,
         name: String,
         ty: TypedTypeRef,
+        value: TypedExpr,
+    },
+    Assign {
+        target: LocalId,
         value: TypedExpr,
     },
     Return(TypedExpr),
@@ -209,12 +231,29 @@ fn lower_block(block: &Block) -> HirBlock {
 
 fn lower_stmt(stmt: &Stmt) -> HirStmt {
     match stmt {
-        Stmt::Fix { name, ty, value } => HirStmt::Fix {
+        Stmt::Local {
+            kind,
+            name,
+            ty,
+            value,
+        } => HirStmt::Local {
+            kind: lower_binding_kind(*kind),
             name: name.clone(),
             ty: lower_type_ref(ty),
             value: lower_expr(value),
         },
+        Stmt::Assign { target, value } => HirStmt::Assign {
+            target: target.clone(),
+            value: lower_expr(value),
+        },
         Stmt::Return(expr) => HirStmt::Return(lower_expr(expr)),
+    }
+}
+
+fn lower_binding_kind(kind: BindingKind) -> HirBindingKind {
+    match kind {
+        BindingKind::Fix => HirBindingKind::Fix,
+        BindingKind::Slot => HirBindingKind::Slot,
     }
 }
 

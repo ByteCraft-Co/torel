@@ -55,11 +55,22 @@ pub struct Block {
     pub stmts: Vec<Stmt>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindingKind {
+    Fix,
+    Slot,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
-    Fix {
+    Local {
+        kind: BindingKind,
         name: String,
         ty: TypeRef,
+        value: Expr,
+    },
+    Assign {
+        target: Vec<String>,
         value: Expr,
     },
     Return(Expr),

@@ -1,5 +1,6 @@
 use torel_ast::{
-    Block, Expr, Item, Param, ProcDecl, SourceFile, Stmt, TypeRef, UnitDecl, Visibility,
+    BindingKind, Block, Expr, Item, Param, ProcDecl, SourceFile, Stmt, TypeRef, UnitDecl,
+    Visibility,
 };
 use torel_lexer::{Keyword, Span, Token, TokenKind};
 
@@ -138,20 +139,36 @@ impl Parser<'_, '_> {
 
     fn stmt(&mut self) -> Result<Stmt, ParseError> {
         if self.eat_keyword(Keyword::Fix) {
-            let name = self.expect_ident()?;
-            self.expect(TokenKind::Colon)?;
-            let ty = self.type_ref()?;
-            self.expect(TokenKind::Equal)?;
-            let value = self.expr()?;
-            self.expect(TokenKind::Semicolon)?;
-            Ok(Stmt::Fix { name, ty, value })
+            self.local_stmt(BindingKind::Fix)
+        } else if self.eat_keyword(Keyword::Slot) {
+            self.local_stmt(BindingKind::Slot)
         } else if self.eat_keyword(Keyword::Return) {
             let expr = self.expr()?;
             self.expect(TokenKind::Semicolon)?;
             Ok(Stmt::Return(expr))
         } else {
-            Err(self.error_current("expected statement"))
+            let target = self.path()?;
+            self.expect(TokenKind::Equal)?;
+            let value = self.expr()?;
+            self.expect(TokenKind::Semicolon)?;
+            Ok(Stmt::Assign { target, value })
         }
+    }
+
+    fn local_stmt(&mut self, kind: BindingKind) -> Result<Stmt, ParseError> {
+        let name = self.expect_ident()?;
+        self.expect(TokenKind::Colon)?;
+        let ty = self.type_ref()?;
+        self.expect(TokenKind::Equal)?;
+        let value = self.expr()?;
+        self.expect(TokenKind::Semicolon)?;
+
+        Ok(Stmt::Local {
+            kind,
+            name,
+            ty,
+            value,
+        })
     }
 
     fn expr(&mut self) -> Result<Expr, ParseError> {
@@ -359,12 +376,46 @@ mod tests {
         let file = parse_source_file(&tokens).expect("source file should parse");
 
         let Item::Proc(proc) = &file.items[0];
-        let Stmt::Fix { name, ty, value } = &proc.body.stmts[0] else {
+        let Stmt::Local {
+            kind,
+            name,
+            ty,
+            value,
+        } = &proc.body.stmts[0]
+        else {
             panic!("first statement should be fix");
         };
 
+        assert_eq!(kind, &BindingKind::Fix);
         assert_eq!(name, "answer");
         assert_eq!(ty.path, vec!["Int32".to_owned()]);
+        assert_eq!(value, &Expr::Int("42".to_owned()));
+    }
+
+    #[test]
+    fn parses_slot_and_assignment() {
+        let tokens = lex(r#"
+            unit app.slots;
+
+            export proc main() -> Int32 {
+                slot answer: Int32 = 40;
+                answer = 42;
+                return answer;
+            }
+            "#);
+        let file = parse_source_file(&tokens).expect("source file should parse");
+
+        let Item::Proc(proc) = &file.items[0];
+        let Stmt::Local { kind, name, .. } = &proc.body.stmts[0] else {
+            panic!("first statement should be slot");
+        };
+        let Stmt::Assign { target, value } = &proc.body.stmts[1] else {
+            panic!("second statement should be assignment");
+        };
+
+        assert_eq!(kind, &BindingKind::Slot);
+        assert_eq!(name, "answer");
+        assert_eq!(target, &vec!["answer".to_owned()]);
         assert_eq!(value, &Expr::Int("42".to_owned()));
     }
 

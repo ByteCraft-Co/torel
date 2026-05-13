@@ -163,6 +163,48 @@ fn checks_valid_fix_call_arg_fixture() {
 }
 
 #[test]
+fn checks_valid_slot_assign_int_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/slot_assign_int.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "valid int slot assignment should pass"
+    );
+}
+
+#[test]
+fn checks_valid_slot_assign_bool_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/slot_assign_bool.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "valid bool slot assignment should pass"
+    );
+}
+
+#[test]
+fn checks_valid_slot_assign_from_call_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/slot_assign_from_call.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "valid slot assignment from call should pass"
+    );
+}
+
+#[test]
 fn rejects_trailing_junk_fixture() {
     assert_failure(
         "tests/fixtures/invalid/trailing_junk.torel",
@@ -271,5 +313,37 @@ fn rejects_return_literal_mismatch() {
     assert_failure(
         "tests/fixtures/invalid/return_literal_mismatch.torel",
         "error: return type mismatch: expected `Exit`, found `Int32`\n",
+    );
+}
+
+#[test]
+fn rejects_assign_to_fix() {
+    assert_failure(
+        "tests/fixtures/invalid/assign_to_fix.torel",
+        "error: cannot assign to immutable local `answer`\n",
+    );
+}
+
+#[test]
+fn rejects_assign_unknown_local() {
+    assert_failure(
+        "tests/fixtures/invalid/assign_unknown_local.torel",
+        "error: unknown local `answer`\n",
+    );
+}
+
+#[test]
+fn rejects_assign_type_mismatch() {
+    assert_failure(
+        "tests/fixtures/invalid/assign_type_mismatch.torel",
+        "error: assignment to `answer` type mismatch: expected `Int32`, found `Exit`\n",
+    );
+}
+
+#[test]
+fn rejects_assign_to_value_path() {
+    assert_failure(
+        "tests/fixtures/invalid/assign_to_value_path.torel",
+        "error: invalid assignment target `Exit.ok`\n",
     );
 }

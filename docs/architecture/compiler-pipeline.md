@@ -36,14 +36,15 @@ source
 The pipeline is executable but intentionally skeletal:
 
 - the lexer recognizes the first core tokens needed by examples
-- the parser accepts a `unit` declaration, the first top-level `proc` shape, `fix` bindings, returns, paths, literals, and procedure calls
+- the parser accepts a `unit` declaration, the first top-level `proc` shape, `fix`/`slot` bindings, assignment statements, returns, paths, literals, and procedure calls
 - HIR preserves unit identity and procedure structure
 - type checking has built-in symbols for `Exit`, `Void`, `Bool`, `Int32`, `UInt64`, `Text`, `Never`, and `Exit.ok`
 - typed IR records resolved type IDs, value IDs, proc IDs, and local IDs
 - procedure symbols carry parameter and return types for call checking
 - literals type as `Int32`, `Text`, and `Bool`
-- `fix` bindings resolve declared types, check initializer types, and add immutable locals for later statements
-- the first semantic checks reject unknown types, unknown locals, duplicate locals, unknown value paths, unknown procedure calls, non-callable values, bad argument counts, bad argument types, bare procedure values, bad local initializers, bad return types, and missing returns from non-`Void` procedures
+- `fix` and `slot` bindings resolve declared types, check initializer types, and add locals for later statements
+- assignments resolve mutable local targets and check assigned expression types
+- the first semantic checks reject unknown types, unknown locals, duplicate locals, assignment to immutable locals, invalid assignment targets, bad assignment values, unknown value paths, unknown procedure calls, non-callable values, bad argument counts, bad argument types, bare procedure values, bad local initializers, bad return types, and missing returns from non-`Void` procedures
 - type/effect/failure/ownership stages return reports
 - codegen supports a check-only summary and reserves LLVM IR for the next backend phase
 

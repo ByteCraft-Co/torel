@@ -1,0 +1,6 @@
+unit fixtures.assign_to_value_path;
+
+export proc main() -> Exit {
+    Exit.ok = Exit.ok;
+    return Exit.ok;
+}

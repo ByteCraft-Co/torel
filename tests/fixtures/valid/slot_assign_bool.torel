@@ -1,0 +1,7 @@
+unit fixtures.slot_assign_bool;
+
+export proc main() -> Bool {
+    slot flag: Bool = false;
+    flag = true;
+    return flag;
+}

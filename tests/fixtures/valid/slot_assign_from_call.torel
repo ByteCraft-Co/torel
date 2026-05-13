@@ -1,0 +1,11 @@
+unit fixtures.slot_assign_from_call;
+
+proc make_exit() -> Exit {
+    return Exit.ok;
+}
+
+export proc main() -> Exit {
+    slot result: Exit = Exit.ok;
+    result = make_exit();
+    return result;
+}
