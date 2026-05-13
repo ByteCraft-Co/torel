@@ -1,4 +1,4 @@
-# 🧱 TOREL LANGUAGE SPEC v0.1: THE SERIOUS BEAST IS BORN
+# 🧱 TOREL LANGUAGE SPEC v0.2: THE SERIOUS BEAST IS BORN
 
 Official branding: **TOREL - Typed Ownership and Resource Effects Language**.
 
@@ -1801,7 +1801,7 @@ Overflow:
 
 ## Standard Library, Toolchain, Package Manager, Testing, Web, DB, Math, FFI, IDE, Debugger, Profiler
 
-We are extending the current TOREL v0.1 language spec: strict native systems/backend language, no normal GC, ownership + arenas, checked effects, checked failures, explicit `move`, `view`, `view slot`, `fix`, `slot`, `proc`, and the `core` / `std` / `sys` library split.
+We are extending the current TOREL v0.2 language spec: strict native systems/backend language, no normal GC, ownership + arenas, checked effects, checked failures, explicit `move`, `view`, `view slot`, `fix`, `slot`, `proc`, and the `core` / `std` / `sys` library split.
 
 Torel is now entering **production ecosystem mode**. The compiler dragon has a factory permit. 🐉🏭
 
@@ -3725,4 +3725,3 @@ but with its own syntax and laws
 
 This is no longer “language idea.”
 This is now **platform architecture**. ⚙️👑
-
