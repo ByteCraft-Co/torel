@@ -1,0 +1,13 @@
+unit fixtures.if_assign_slot;
+
+export proc main() -> Int32 {
+    slot answer: Int32 = 0;
+
+    if true {
+        answer = 1;
+    } else {
+        answer = 2;
+    }
+
+    return answer;
+}

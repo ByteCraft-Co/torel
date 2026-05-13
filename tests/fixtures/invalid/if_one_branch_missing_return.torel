@@ -1,0 +1,9 @@
+unit fixtures.if_one_branch_missing_return;
+
+export proc main() -> Int32 {
+    if true {
+        return 1;
+    } else {
+        fix answer: Int32 = 2;
+    }
+}

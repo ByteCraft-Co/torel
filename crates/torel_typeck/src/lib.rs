@@ -47,6 +47,9 @@ pub enum TypeckError {
     #[error("invalid assignment target `{path}`")]
     InvalidAssignmentTarget { path: String },
 
+    #[error("if condition type mismatch: expected `Bool`, found `{found}`")]
+    IfConditionTypeMismatch { found: String },
+
     #[error("unknown procedure `{name}`")]
     UnknownProc { name: String },
 
@@ -238,11 +241,18 @@ fn check_proc(symbols: &SymbolTable, proc: &HirProc) -> Result<TypedProc, Typeck
         .map(|proc| proc.id)
         .expect("procedure should be predeclared");
     let params = check_params(symbols, &proc.params)?;
-    let locals = local_map(&params)?;
+    let mut locals = local_map(&params)?;
+    let mut next_local_id = params.len() as u32;
     let return_type = symbols.resolve_type(&proc.return_type)?;
-    let body = check_block(symbols, locals, &proc.body)?;
+    let body = check_block(
+        symbols,
+        &mut locals,
+        &mut next_local_id,
+        &proc.body,
+        &return_type,
+    )?;
 
-    check_returns(symbols, proc, &return_type, &body)?;
+    check_return_flow(proc, &return_type, &body)?;
 
     Ok(TypedProc {
         id,
@@ -297,13 +307,21 @@ fn local_map(params: &[TypedParam]) -> Result<HashMap<String, LocalSymbol>, Type
 
 fn check_block(
     symbols: &SymbolTable,
-    mut locals: HashMap<String, LocalSymbol>,
+    locals: &mut HashMap<String, LocalSymbol>,
+    next_local_id: &mut u32,
     block: &HirBlock,
+    expected_return: &TypedTypeRef,
 ) -> Result<TypedBlock, TypeckError> {
     let mut stmts = Vec::new();
 
     for stmt in &block.stmts {
-        stmts.push(check_stmt(symbols, &mut locals, stmt)?);
+        stmts.push(check_stmt(
+            symbols,
+            locals,
+            next_local_id,
+            stmt,
+            expected_return,
+        )?);
     }
 
     Ok(TypedBlock { stmts })
@@ -312,7 +330,9 @@ fn check_block(
 fn check_stmt(
     symbols: &SymbolTable,
     locals: &mut HashMap<String, LocalSymbol>,
+    next_local_id: &mut u32,
     stmt: &HirStmt,
+    expected_return: &TypedTypeRef,
 ) -> Result<TypedStmt, TypeckError> {
     match stmt {
         HirStmt::Local {
@@ -320,15 +340,29 @@ fn check_stmt(
             name,
             ty,
             value,
-        } => check_local_stmt(symbols, locals, *kind, name, ty, value),
+        } => check_local_stmt(symbols, locals, next_local_id, *kind, name, ty, value),
         HirStmt::Assign { target, value } => check_assign_stmt(symbols, locals, target, value),
-        HirStmt::Return(expr) => Ok(TypedStmt::Return(check_expr(symbols, locals, expr)?)),
+        HirStmt::If {
+            condition,
+            then_block,
+            else_block,
+        } => check_if_stmt(
+            symbols,
+            locals,
+            next_local_id,
+            condition,
+            then_block,
+            else_block.as_ref(),
+            expected_return,
+        ),
+        HirStmt::Return(expr) => check_return_stmt(symbols, locals, expected_return, expr),
     }
 }
 
 fn check_local_stmt(
     symbols: &SymbolTable,
     locals: &mut HashMap<String, LocalSymbol>,
+    next_local_id: &mut u32,
     kind: HirBindingKind,
     name: &str,
     ty: &HirTypeRef,
@@ -352,7 +386,8 @@ fn check_local_stmt(
         });
     }
 
-    let id = LocalId(locals.len() as u32);
+    let id = LocalId(*next_local_id);
+    *next_local_id += 1;
     let mutability = local_mutability(kind);
     locals.insert(
         name.to_owned(),
@@ -408,6 +443,72 @@ fn check_assign_stmt(
         target: local.id,
         value,
     })
+}
+
+fn check_if_stmt(
+    symbols: &SymbolTable,
+    locals: &mut HashMap<String, LocalSymbol>,
+    next_local_id: &mut u32,
+    condition: &HirExpr,
+    then_block: &HirBlock,
+    else_block: Option<&HirBlock>,
+    expected_return: &TypedTypeRef,
+) -> Result<TypedStmt, TypeckError> {
+    let condition = check_expr(symbols, locals, condition)?;
+    let condition_type = expr_type(&condition);
+    let bool_type = symbols.builtin_type("Bool");
+
+    if condition_type != bool_type {
+        return Err(TypeckError::IfConditionTypeMismatch {
+            found: symbols.type_name(condition_type),
+        });
+    }
+
+    let mut then_locals = locals.clone();
+    let then_block = check_block(
+        symbols,
+        &mut then_locals,
+        next_local_id,
+        then_block,
+        expected_return,
+    )?;
+    let else_block = else_block
+        .map(|else_block| {
+            let mut else_locals = locals.clone();
+            check_block(
+                symbols,
+                &mut else_locals,
+                next_local_id,
+                else_block,
+                expected_return,
+            )
+        })
+        .transpose()?;
+
+    Ok(TypedStmt::If {
+        condition,
+        then_block,
+        else_block,
+    })
+}
+
+fn check_return_stmt(
+    symbols: &SymbolTable,
+    locals: &HashMap<String, LocalSymbol>,
+    expected: &TypedTypeRef,
+    expr: &HirExpr,
+) -> Result<TypedStmt, TypeckError> {
+    let expr = check_expr(symbols, locals, expr)?;
+    let found = expr_type(&expr);
+
+    if found != expected.id {
+        return Err(TypeckError::ReturnTypeMismatch {
+            expected: expected.display_name.clone(),
+            found: symbols.type_name(found),
+        });
+    }
+
+    Ok(TypedStmt::Return(expr))
 }
 
 fn local_mutability(kind: HirBindingKind) -> Mutability {
@@ -523,30 +624,12 @@ fn check_call_expr(
     })
 }
 
-fn check_returns(
-    symbols: &SymbolTable,
+fn check_return_flow(
     proc: &HirProc,
     expected: &TypedTypeRef,
     body: &TypedBlock,
 ) -> Result<(), TypeckError> {
-    let mut has_return = false;
-
-    for stmt in &body.stmts {
-        let TypedStmt::Return(expr) = stmt else {
-            continue;
-        };
-
-        has_return = true;
-        let found = expr_type(expr);
-        if found != expected.id {
-            return Err(TypeckError::ReturnTypeMismatch {
-                expected: expected.display_name.clone(),
-                found: symbols.type_name(found),
-            });
-        }
-    }
-
-    if !has_return && expected.display_name != "Void" {
+    if expected.display_name != "Void" && block_flow(body) != Flow::AlwaysReturns {
         return Err(TypeckError::MissingReturn {
             proc: proc.name.clone(),
             expected: expected.display_name.clone(),
@@ -554,6 +637,40 @@ fn check_returns(
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Flow {
+    MayContinue,
+    AlwaysReturns,
+}
+
+fn block_flow(block: &TypedBlock) -> Flow {
+    for stmt in &block.stmts {
+        if stmt_flow(stmt) == Flow::AlwaysReturns {
+            return Flow::AlwaysReturns;
+        }
+    }
+
+    Flow::MayContinue
+}
+
+fn stmt_flow(stmt: &TypedStmt) -> Flow {
+    match stmt {
+        TypedStmt::Return(_) => Flow::AlwaysReturns,
+        TypedStmt::If {
+            then_block,
+            else_block: Some(else_block),
+            ..
+        } if block_flow(then_block) == Flow::AlwaysReturns
+            && block_flow(else_block) == Flow::AlwaysReturns =>
+        {
+            Flow::AlwaysReturns
+        }
+        TypedStmt::Local { .. } | TypedStmt::Assign { .. } | TypedStmt::If { .. } => {
+            Flow::MayContinue
+        }
+    }
 }
 
 fn expr_type(expr: &TypedExpr) -> TypeId {

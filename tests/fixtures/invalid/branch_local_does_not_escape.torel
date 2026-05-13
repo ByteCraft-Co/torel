@@ -1,0 +1,11 @@
+unit fixtures.branch_local_does_not_escape;
+
+export proc main() -> Int32 {
+    if true {
+        fix answer: Int32 = 1;
+    } else {
+        fix answer: Int32 = 2;
+    }
+
+    return answer;
+}

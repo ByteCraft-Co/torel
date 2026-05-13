@@ -47,6 +47,8 @@ pub enum Keyword {
     Does,
     Fails,
     Return,
+    If,
+    Else,
     True,
     False,
 }
@@ -171,6 +173,8 @@ impl<'src> Lexer<'src> {
             "does" => TokenKind::Keyword(Keyword::Does),
             "fails" => TokenKind::Keyword(Keyword::Fails),
             "return" => TokenKind::Keyword(Keyword::Return),
+            "if" => TokenKind::Keyword(Keyword::If),
+            "else" => TokenKind::Keyword(Keyword::Else),
             "true" => TokenKind::Keyword(Keyword::True),
             "false" => TokenKind::Keyword(Keyword::False),
             _ => TokenKind::Ident(text),

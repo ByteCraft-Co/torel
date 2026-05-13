@@ -73,6 +73,11 @@ pub enum Stmt {
         target: Vec<String>,
         value: Expr,
     },
+    If {
+        condition: Expr,
+        then_block: Block,
+        else_block: Option<Block>,
+    },
     Return(Expr),
 }
 

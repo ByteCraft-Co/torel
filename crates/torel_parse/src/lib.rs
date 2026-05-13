@@ -142,6 +142,8 @@ impl Parser<'_, '_> {
             self.local_stmt(BindingKind::Fix)
         } else if self.eat_keyword(Keyword::Slot) {
             self.local_stmt(BindingKind::Slot)
+        } else if self.eat_keyword(Keyword::If) {
+            self.if_stmt()
         } else if self.eat_keyword(Keyword::Return) {
             let expr = self.expr()?;
             self.expect(TokenKind::Semicolon)?;
@@ -168,6 +170,22 @@ impl Parser<'_, '_> {
             name,
             ty,
             value,
+        })
+    }
+
+    fn if_stmt(&mut self) -> Result<Stmt, ParseError> {
+        let condition = self.expr()?;
+        let then_block = self.block()?;
+        let else_block = if self.eat_keyword(Keyword::Else) {
+            Some(self.block()?)
+        } else {
+            None
+        };
+
+        Ok(Stmt::If {
+            condition,
+            then_block,
+            else_block,
         })
     }
 
@@ -417,6 +435,36 @@ mod tests {
         assert_eq!(name, "answer");
         assert_eq!(target, &vec!["answer".to_owned()]);
         assert_eq!(value, &Expr::Int("42".to_owned()));
+    }
+
+    #[test]
+    fn parses_if_else_statement() {
+        let tokens = lex(r#"
+            unit app.branching;
+
+            export proc main() -> Int32 {
+                if true {
+                    return 1;
+                } else {
+                    return 2;
+                }
+            }
+            "#);
+        let file = parse_source_file(&tokens).expect("source file should parse");
+
+        let Item::Proc(proc) = &file.items[0];
+        let Stmt::If {
+            condition,
+            then_block,
+            else_block,
+        } = &proc.body.stmts[0]
+        else {
+            panic!("first statement should be if");
+        };
+
+        assert_eq!(condition, &Expr::Bool(true));
+        assert_eq!(then_block.stmts.len(), 1);
+        assert_eq!(else_block.as_ref().expect("else block").stmts.len(), 1);
     }
 
     #[test]

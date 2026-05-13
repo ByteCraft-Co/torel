@@ -1,0 +1,11 @@
+unit fixtures.if_local_bool_condition;
+
+export proc main() -> Int32 {
+    fix use_first: Bool = true;
+
+    if use_first {
+        return 1;
+    } else {
+        return 2;
+    }
+}

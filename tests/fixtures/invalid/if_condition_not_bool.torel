@@ -1,0 +1,9 @@
+unit fixtures.if_condition_not_bool;
+
+export proc main() -> Int32 {
+    if 42 {
+        return 1;
+    } else {
+        return 2;
+    }
+}

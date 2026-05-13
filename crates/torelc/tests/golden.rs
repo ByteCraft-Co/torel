@@ -205,6 +205,45 @@ fn checks_valid_slot_assign_from_call_fixture() {
 }
 
 #[test]
+fn checks_valid_if_else_return_int_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/if_else_return_int.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(output.status.success(), "valid if/else return should pass");
+}
+
+#[test]
+fn checks_valid_if_local_bool_condition_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/if_local_bool_condition.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "valid local bool condition should pass"
+    );
+}
+
+#[test]
+fn checks_valid_if_assign_slot_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/if_assign_slot.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "valid branch slot assignment should pass"
+    );
+}
+
+#[test]
 fn rejects_trailing_junk_fixture() {
     assert_failure(
         "tests/fixtures/invalid/trailing_junk.torel",
@@ -345,5 +384,37 @@ fn rejects_assign_to_value_path() {
     assert_failure(
         "tests/fixtures/invalid/assign_to_value_path.torel",
         "error: invalid assignment target `Exit.ok`\n",
+    );
+}
+
+#[test]
+fn rejects_if_condition_not_bool() {
+    assert_failure(
+        "tests/fixtures/invalid/if_condition_not_bool.torel",
+        "error: if condition type mismatch: expected `Bool`, found `Int32`\n",
+    );
+}
+
+#[test]
+fn rejects_if_missing_else_return() {
+    assert_failure(
+        "tests/fixtures/invalid/if_missing_else_return.torel",
+        "error: missing return from procedure `main`: expected `Int32`\n",
+    );
+}
+
+#[test]
+fn rejects_if_one_branch_missing_return() {
+    assert_failure(
+        "tests/fixtures/invalid/if_one_branch_missing_return.torel",
+        "error: missing return from procedure `main`: expected `Int32`\n",
+    );
+}
+
+#[test]
+fn rejects_branch_local_does_not_escape() {
+    assert_failure(
+        "tests/fixtures/invalid/branch_local_does_not_escape.torel",
+        "error: unknown local `answer`\n",
     );
 }

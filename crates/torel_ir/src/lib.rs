@@ -75,6 +75,11 @@ pub enum HirStmt {
         target: Vec<String>,
         value: HirExpr,
     },
+    If {
+        condition: HirExpr,
+        then_block: HirBlock,
+        else_block: Option<HirBlock>,
+    },
     Return(HirExpr),
 }
 
@@ -142,6 +147,11 @@ pub enum TypedStmt {
     Assign {
         target: LocalId,
         value: TypedExpr,
+    },
+    If {
+        condition: TypedExpr,
+        then_block: TypedBlock,
+        else_block: Option<TypedBlock>,
     },
     Return(TypedExpr),
 }
@@ -245,6 +255,15 @@ fn lower_stmt(stmt: &Stmt) -> HirStmt {
         Stmt::Assign { target, value } => HirStmt::Assign {
             target: target.clone(),
             value: lower_expr(value),
+        },
+        Stmt::If {
+            condition,
+            then_block,
+            else_block,
+        } => HirStmt::If {
+            condition: lower_expr(condition),
+            then_block: lower_block(then_block),
+            else_block: else_block.as_ref().map(lower_block),
         },
         Stmt::Return(expr) => HirStmt::Return(lower_expr(expr)),
     }
