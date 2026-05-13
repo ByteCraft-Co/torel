@@ -21,5 +21,46 @@ pub struct UnitDecl {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Item {
-    Placeholder,
+    Proc(ProcDecl),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Visibility {
+    Private,
+    Export,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProcDecl {
+    pub visibility: Visibility,
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: TypeRef,
+    pub body: Block,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Param {
+    pub name: String,
+    pub ty: TypeRef,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypeRef {
+    pub path: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Block {
+    pub stmts: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Stmt {
+    Return(Expr),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Expr {
+    Path(Vec<String>),
 }

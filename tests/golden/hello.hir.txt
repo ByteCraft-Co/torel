@@ -1,0 +1,9 @@
+HirModule {
+    unit_path: Some(
+        [
+            "examples",
+            "hello",
+        ],
+    ),
+    item_count: 1,
+}

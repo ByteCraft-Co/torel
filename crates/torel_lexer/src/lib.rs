@@ -25,6 +25,7 @@ pub enum TokenKind<'src> {
     LParen,
     RParen,
     Arrow,
+    Unknown(&'src str),
     Eof,
 }
 
@@ -44,6 +45,7 @@ pub enum Keyword {
     Arena,
     Does,
     Fails,
+    Return,
 }
 
 pub fn lex(source: &str) -> Vec<Token<'_>> {
@@ -97,7 +99,7 @@ impl<'src> Lexer<'src> {
             ch if is_ident_start(ch) => self.ident_or_keyword(),
             _ => {
                 self.bump_char();
-                TokenKind::Ident(&self.source[start..self.offset])
+                TokenKind::Unknown(&self.source[start..self.offset])
             }
         };
 
@@ -164,6 +166,7 @@ impl<'src> Lexer<'src> {
             "arena" => TokenKind::Keyword(Keyword::Arena),
             "does" => TokenKind::Keyword(Keyword::Does),
             "fails" => TokenKind::Keyword(Keyword::Fails),
+            "return" => TokenKind::Keyword(Keyword::Return),
             _ => TokenKind::Ident(text),
         }
     }

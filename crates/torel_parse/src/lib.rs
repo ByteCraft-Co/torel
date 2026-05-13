@@ -1,4 +1,6 @@
-use torel_ast::{SourceFile, UnitDecl};
+use torel_ast::{
+    Block, Expr, Item, Param, ProcDecl, SourceFile, Stmt, TypeRef, UnitDecl, Visibility,
+};
 use torel_lexer::{Keyword, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,10 +34,15 @@ impl Parser<'_, '_> {
             None
         };
 
-        Ok(SourceFile {
-            unit,
-            items: Vec::new(),
-        })
+        let mut items = Vec::new();
+
+        while !self.at_eof() {
+            items.push(self.item()?);
+        }
+
+        self.expect(TokenKind::Eof)?;
+
+        Ok(SourceFile { unit, items })
     }
 
     fn unit_decl(&mut self) -> Result<UnitDecl, ParseError> {
@@ -51,13 +58,125 @@ impl Parser<'_, '_> {
         Ok(UnitDecl { path })
     }
 
+    fn item(&mut self) -> Result<Item, ParseError> {
+        let visibility = if self.eat_keyword(Keyword::Export) {
+            Visibility::Export
+        } else {
+            Visibility::Private
+        };
+
+        if self.at_keyword(Keyword::Proc) {
+            Ok(Item::Proc(self.proc_decl(visibility)?))
+        } else {
+            Err(ParseError {
+                message: "expected top-level item".to_owned(),
+            })
+        }
+    }
+
+    fn proc_decl(&mut self, visibility: Visibility) -> Result<ProcDecl, ParseError> {
+        self.expect_keyword(Keyword::Proc)?;
+        let name = self.expect_ident()?;
+        let params = self.param_list()?;
+        self.expect(TokenKind::Arrow)?;
+        let return_type = self.type_ref()?;
+        let body = self.block()?;
+
+        Ok(ProcDecl {
+            visibility,
+            name,
+            params,
+            return_type,
+            body,
+        })
+    }
+
+    fn param_list(&mut self) -> Result<Vec<Param>, ParseError> {
+        self.expect(TokenKind::LParen)?;
+
+        if self.eat(TokenKind::RParen) {
+            return Ok(Vec::new());
+        }
+
+        let mut params = Vec::new();
+
+        loop {
+            let name = self.expect_ident()?;
+            self.expect(TokenKind::Colon)?;
+            let ty = self.type_ref()?;
+            params.push(Param { name, ty });
+
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
+        }
+
+        self.expect(TokenKind::RParen)?;
+        Ok(params)
+    }
+
+    fn type_ref(&mut self) -> Result<TypeRef, ParseError> {
+        Ok(TypeRef { path: self.path()? })
+    }
+
+    fn block(&mut self) -> Result<Block, ParseError> {
+        self.expect(TokenKind::LBrace)?;
+        let mut stmts = Vec::new();
+
+        while !self.eat(TokenKind::RBrace) {
+            if self.at_eof() {
+                return Err(ParseError {
+                    message: "expected statement or `}`".to_owned(),
+                });
+            }
+
+            stmts.push(self.stmt()?);
+        }
+
+        Ok(Block { stmts })
+    }
+
+    fn stmt(&mut self) -> Result<Stmt, ParseError> {
+        if self.eat_keyword(Keyword::Return) {
+            let expr = self.expr()?;
+            self.expect(TokenKind::Semicolon)?;
+            Ok(Stmt::Return(expr))
+        } else {
+            Err(ParseError {
+                message: "expected statement".to_owned(),
+            })
+        }
+    }
+
+    fn expr(&mut self) -> Result<Expr, ParseError> {
+        Ok(Expr::Path(self.path()?))
+    }
+
+    fn path(&mut self) -> Result<Vec<String>, ParseError> {
+        let mut path = vec![self.expect_ident()?];
+
+        while self.eat(TokenKind::Dot) {
+            path.push(self.expect_ident()?);
+        }
+
+        Ok(path)
+    }
+
     fn at_keyword(&self, keyword: Keyword) -> bool {
         matches!(self.peek(), Some(TokenKind::Keyword(actual)) if *actual == keyword)
     }
 
-    fn expect_keyword(&mut self, keyword: Keyword) -> Result<(), ParseError> {
+    fn eat_keyword(&mut self, keyword: Keyword) -> bool {
         if self.at_keyword(keyword) {
             self.cursor += 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    fn expect_keyword(&mut self, keyword: Keyword) -> Result<(), ParseError> {
+        if self.eat_keyword(keyword) {
             Ok(())
         } else {
             Err(ParseError {
@@ -101,6 +220,10 @@ impl Parser<'_, '_> {
     fn peek(&self) -> Option<&TokenKind<'_>> {
         self.tokens.get(self.cursor).map(|token| &token.kind)
     }
+
+    fn at_eof(&self) -> bool {
+        matches!(self.peek(), Some(TokenKind::Eof))
+    }
 }
 
 #[cfg(test)]
@@ -117,5 +240,32 @@ mod tests {
             file.unit.expect("unit decl").path,
             vec!["app".to_owned(), "server".to_owned()]
         );
+    }
+
+    #[test]
+    fn parses_exported_proc() {
+        let tokens = lex(r#"
+            unit app.server;
+
+            export proc main() -> Exit {
+                return Exit.ok;
+            }
+            "#);
+        let file = parse_source_file(&tokens).expect("source file should parse");
+
+        assert_eq!(file.items.len(), 1);
+        let Item::Proc(proc) = &file.items[0];
+        assert_eq!(proc.visibility, Visibility::Export);
+        assert_eq!(proc.name, "main");
+        assert_eq!(proc.return_type.path, vec!["Exit".to_owned()]);
+        assert_eq!(proc.body.stmts.len(), 1);
+    }
+
+    #[test]
+    fn rejects_trailing_junk() {
+        let tokens = lex("unit app.server; ???");
+        let err = parse_source_file(&tokens).expect_err("trailing junk should fail");
+
+        assert_eq!(err.message, "expected top-level item");
     }
 }

@@ -33,3 +33,6 @@ jobs:
 
       - name: Test
         run: cargo test --workspace
+
+      - name: Torel check smoke test
+        run: cargo run -p torelc -- examples/hello.torel --emit check

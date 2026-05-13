@@ -1,0 +1,3 @@
+check-only module unit=examples.hello items=1
+pipeline: source -> lexer -> parser -> AST -> HIR/typed IR -> type/effect/failure/ownership checks -> codegen
+checks: effects=1 failures=1 ownership_regions=1

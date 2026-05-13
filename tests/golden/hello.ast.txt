@@ -1,0 +1,36 @@
+SourceFile {
+    unit: Some(
+        UnitDecl {
+            path: [
+                "examples",
+                "hello",
+            ],
+        },
+    ),
+    items: [
+        Proc(
+            ProcDecl {
+                visibility: Export,
+                name: "main",
+                params: [],
+                return_type: TypeRef {
+                    path: [
+                        "Exit",
+                    ],
+                },
+                body: Block {
+                    stmts: [
+                        Return(
+                            Path(
+                                [
+                                    "Exit",
+                                    "ok",
+                                ],
+                            ),
+                        ),
+                    ],
+                },
+            },
+        ),
+    ],
+}
