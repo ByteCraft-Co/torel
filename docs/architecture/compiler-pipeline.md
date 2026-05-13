@@ -13,7 +13,9 @@ source
   -> type/return checks
   -> effect/failure checks
   -> ownership checks
-  -> codegen
+  -> MIR
+  -> MIR validation
+  -> backend
 ```
 
 ## Stage Ownership
@@ -30,7 +32,11 @@ source
 | Diagnostics | `torel_diagnostics` / `torel_session` | Preserve source spans, map bytes to line/column locations, and render source-labelled errors. |
 | Effect/failure checking | `torel_effects` | Validate declared effects and checked failure channels. |
 | Ownership checking | `torel_ownership` | Enforce ownership, moves, views, and arena escape rules. |
-| Code generation | `torel_codegen` | Lower checked IR toward LLVM and later MLIR/LLVM. |
+| MIR | `torel_mir` | Lower typed IR into an explicit backend control-flow graph. |
+| MIR validation | `torel_mir` | Prove backend input is structurally valid before emission. |
+| Backend interface | `torel_backend` | Define backend targets, artifacts, and structured backend errors. |
+| LLVM backend | `torel_codegen_llvm` | Reserved C++ LLVM engine-room boundary for verified LLVM IR. |
+| C debug backend | `torel_codegen_c` | Reserved debug backend for readable C output from validated MIR. |
 
 ## Current State
 
@@ -55,7 +61,8 @@ The pipeline is executable but intentionally skeletal:
 - the first semantic checks reject unknown types, unknown locals, duplicate locals, assignment to immutable locals, invalid assignment targets, bad assignment values, non-`Bool` conditions, unknown value paths, unknown procedure calls, non-callable values, bad argument counts, bad argument types, bare procedure values, bad local initializers, bad explicit and final-expression return types, and missing guaranteed returns from non-`Void` procedures
 - parser and type-checking errors render with file, line, column, source text, and an underline label
 - type/effect/failure/ownership stages return reports
-- codegen supports a check-only summary and reserves LLVM IR for the next backend phase
+- MIR and backend crates exist as the boundary for the next lowering phase
+- codegen supports a check-only summary and reserves LLVM IR for the backend phase
 
 This lets `torelc` exercise the final shape from day one:
 
@@ -71,5 +78,6 @@ cargo run -p torelc -- examples\hello.torel --emit hir
 - Diagnostics should preserve source spans as far as possible.
 - The AST should stay close to surface syntax.
 - HIR and typed IR should be compiler-owned and free to normalize syntax.
+- MIR is the only contract native backends consume.
 - MLIR/LLVM must not become the frontend semantic model.
 - Each semantic pass should be testable without running native codegen.

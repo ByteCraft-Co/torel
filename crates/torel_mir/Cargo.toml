@@ -1,0 +1,12 @@
+[package]
+name = "torel_mir"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+thiserror.workspace = true
+torel_diagnostics.workspace = true
+torel_ir.workspace = true
