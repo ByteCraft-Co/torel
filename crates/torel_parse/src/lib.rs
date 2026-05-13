@@ -6,6 +6,14 @@ pub struct ParseError {
     pub message: String,
 }
 
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ParseError {}
+
 pub fn parse_source_file(tokens: &[Token<'_>]) -> Result<SourceFile, ParseError> {
     let mut parser = Parser { tokens, cursor: 0 };
     parser.source_file()

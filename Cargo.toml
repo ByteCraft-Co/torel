@@ -3,10 +3,15 @@ members = [
     "crates/torel",
     "crates/torelc",
     "crates/torel_ast",
+    "crates/torel_codegen",
     "crates/torel_diagnostics",
+    "crates/torel_effects",
+    "crates/torel_ir",
     "crates/torel_lexer",
+    "crates/torel_ownership",
     "crates/torel_parse",
     "crates/torel_session",
+    "crates/torel_typeck",
 ]
 resolver = "3"
 
@@ -21,7 +26,12 @@ rust-version = "1.93"
 clap = { version = "4.5", features = ["derive"] }
 thiserror = "2.0"
 torel_ast = { path = "crates/torel_ast" }
+torel_codegen = { path = "crates/torel_codegen" }
 torel_diagnostics = { path = "crates/torel_diagnostics" }
+torel_effects = { path = "crates/torel_effects" }
+torel_ir = { path = "crates/torel_ir" }
 torel_lexer = { path = "crates/torel_lexer" }
+torel_ownership = { path = "crates/torel_ownership" }
 torel_parse = { path = "crates/torel_parse" }
 torel_session = { path = "crates/torel_session" }
+torel_typeck = { path = "crates/torel_typeck" }

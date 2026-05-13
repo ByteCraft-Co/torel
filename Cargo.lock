@@ -183,12 +183,43 @@ name = "torel_ast"
 version = "0.1.0"
 
 [[package]]
+name = "torel_codegen"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "torel_ir",
+]
+
+[[package]]
 name = "torel_diagnostics"
 version = "0.1.0"
 
 [[package]]
+name = "torel_effects"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "torel_ir",
+]
+
+[[package]]
+name = "torel_ir"
+version = "0.1.0"
+dependencies = [
+ "torel_ast",
+]
+
+[[package]]
 name = "torel_lexer"
 version = "0.1.0"
+
+[[package]]
+name = "torel_ownership"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "torel_ir",
+]
 
 [[package]]
 name = "torel_parse"
@@ -203,12 +234,26 @@ name = "torel_session"
 version = "0.1.0"
 
 [[package]]
+name = "torel_typeck"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+ "torel_ir",
+]
+
+[[package]]
 name = "torelc"
 version = "0.1.0"
 dependencies = [
  "clap",
  "thiserror",
+ "torel_codegen",
+ "torel_effects",
+ "torel_ir",
  "torel_lexer",
+ "torel_ownership",
+ "torel_parse",
+ "torel_typeck",
 ]
 
 [[package]]

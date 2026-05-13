@@ -1,0 +1,5 @@
+unit fixtures.hello;
+
+export proc main() -> Exit {
+    return Exit.ok;
+}
