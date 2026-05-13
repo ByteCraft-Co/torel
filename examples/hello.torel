@@ -1,0 +1,5 @@
+unit examples.hello;
+
+export proc main() -> Exit {
+    return Exit.ok;
+}

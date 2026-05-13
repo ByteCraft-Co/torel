@@ -1,0 +1,11 @@
+[package]
+name = "torel_parse"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+torel_ast.workspace = true
+torel_lexer.workspace = true

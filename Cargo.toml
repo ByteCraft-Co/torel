@@ -1,0 +1,27 @@
+[workspace]
+members = [
+    "crates/torel",
+    "crates/torelc",
+    "crates/torel_ast",
+    "crates/torel_diagnostics",
+    "crates/torel_lexer",
+    "crates/torel_parse",
+    "crates/torel_session",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ByteCraft-Co/torel"
+rust-version = "1.93"
+
+[workspace.dependencies]
+clap = { version = "4.5", features = ["derive"] }
+thiserror = "2.0"
+torel_ast = { path = "crates/torel_ast" }
+torel_diagnostics = { path = "crates/torel_diagnostics" }
+torel_lexer = { path = "crates/torel_lexer" }
+torel_parse = { path = "crates/torel_parse" }
+torel_session = { path = "crates/torel_session" }
