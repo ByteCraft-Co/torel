@@ -249,8 +249,11 @@ name = "torel_typeck"
 version = "0.1.0"
 dependencies = [
  "thiserror",
+ "torel_ast",
  "torel_diagnostics",
  "torel_ir",
+ "torel_lexer",
+ "torel_parse",
 ]
 
 [[package]]

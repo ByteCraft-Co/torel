@@ -1,0 +1,111 @@
+SourceFile {
+    unit: Some(
+        UnitDecl {
+            path: Path {
+                segments: [
+                    "fixtures",
+                    "operator_precedence",
+                ],
+                span: Span {
+                    start: 5,
+                    end: 33,
+                },
+            },
+            span: Span {
+                start: 0,
+                end: 34,
+            },
+        },
+    ),
+    items: [
+        Proc(
+            ProcDecl {
+                visibility: Export,
+                visibility_span: None,
+                name: "main",
+                name_span: Span {
+                    start: 48,
+                    end: 52,
+                },
+                params: [],
+                return_type: TypeRef {
+                    path: Path {
+                        segments: [
+                            "Int32",
+                        ],
+                        span: Span {
+                            start: 58,
+                            end: 63,
+                        },
+                    },
+                },
+                body: Block {
+                    stmts: [],
+                    tail: Some(
+                        Expr {
+                            kind: Binary {
+                                op: Add,
+                                op_span: Span {
+                                    start: 72,
+                                    end: 73,
+                                },
+                                lhs: Expr {
+                                    kind: Int(
+                                        "1",
+                                    ),
+                                    span: Span {
+                                        start: 70,
+                                        end: 71,
+                                    },
+                                },
+                                rhs: Expr {
+                                    kind: Binary {
+                                        op: Mul,
+                                        op_span: Span {
+                                            start: 76,
+                                            end: 77,
+                                        },
+                                        lhs: Expr {
+                                            kind: Int(
+                                                "2",
+                                            ),
+                                            span: Span {
+                                                start: 74,
+                                                end: 75,
+                                            },
+                                        },
+                                        rhs: Expr {
+                                            kind: Int(
+                                                "3",
+                                            ),
+                                            span: Span {
+                                                start: 78,
+                                                end: 79,
+                                            },
+                                        },
+                                    },
+                                    span: Span {
+                                        start: 74,
+                                        end: 79,
+                                    },
+                                },
+                            },
+                            span: Span {
+                                start: 70,
+                                end: 79,
+                            },
+                        },
+                    ),
+                    span: Span {
+                        start: 64,
+                        end: 81,
+                    },
+                },
+                span: Span {
+                    start: 43,
+                    end: 81,
+                },
+            },
+        ),
+    ],
+}

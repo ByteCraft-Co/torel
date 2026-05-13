@@ -1,0 +1,5 @@
+unit fixtures.operator_unary_not;
+
+export proc main() -> Bool {
+    !false
+}

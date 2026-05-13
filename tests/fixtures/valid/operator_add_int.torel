@@ -1,0 +1,5 @@
+unit fixtures.operator_add_int;
+
+export proc main() -> Int32 {
+    40 + 2
+}

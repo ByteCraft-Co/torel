@@ -1,0 +1,9 @@
+unit fixtures.if_comparison_condition;
+
+export proc main() -> Int32 {
+    if 1 < 2 {
+        10
+    } else {
+        20
+    }
+}

@@ -1,0 +1,5 @@
+unit fixtures.operator_add_exit;
+
+export proc main() -> Exit {
+    Exit.ok + Exit.ok
+}

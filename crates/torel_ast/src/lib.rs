@@ -76,6 +76,60 @@ pub enum BindingKind {
     Slot,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UnaryOp {
+    Not,
+    Neg,
+}
+
+impl UnaryOp {
+    #[must_use]
+    pub const fn symbol(self) -> &'static str {
+        match self {
+            Self::Not => "!",
+            Self::Neg => "-",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BinaryOp {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    Eq,
+    NotEq,
+    Lt,
+    LtEq,
+    Gt,
+    GtEq,
+    And,
+    Or,
+}
+
+impl BinaryOp {
+    #[must_use]
+    pub const fn symbol(self) -> &'static str {
+        match self {
+            Self::Add => "+",
+            Self::Sub => "-",
+            Self::Mul => "*",
+            Self::Div => "/",
+            Self::Rem => "%",
+            Self::Eq => "==",
+            Self::NotEq => "!=",
+            Self::Lt => "<",
+            Self::LtEq => "<=",
+            Self::Gt => ">",
+            Self::GtEq => ">=",
+            Self::And => "&&",
+            Self::Or => "||",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Stmt {
     pub kind: StmtKind,
@@ -115,5 +169,19 @@ pub enum ExprKind {
     Int(String),
     Text(String),
     Bool(bool),
-    Call { callee: Path, args: Vec<Expr> },
+    Call {
+        callee: Path,
+        args: Vec<Expr>,
+    },
+    Unary {
+        op: UnaryOp,
+        op_span: Span,
+        expr: Box<Expr>,
+    },
+    Binary {
+        op: BinaryOp,
+        op_span: Span,
+        lhs: Box<Expr>,
+        rhs: Box<Expr>,
+    },
 }

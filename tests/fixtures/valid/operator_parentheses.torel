@@ -1,0 +1,5 @@
+unit fixtures.operator_parentheses;
+
+export proc main() -> Int32 {
+    (1 + 2) * 3
+}

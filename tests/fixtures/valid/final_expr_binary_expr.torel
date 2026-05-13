@@ -1,0 +1,5 @@
+unit fixtures.final_expr_binary_expr;
+
+export proc main() -> Bool {
+    1 + 2 * 3 == 7
+}

@@ -1,0 +1,5 @@
+unit fixtures.operator_and_int_bool;
+
+export proc main() -> Bool {
+    1 && true
+}

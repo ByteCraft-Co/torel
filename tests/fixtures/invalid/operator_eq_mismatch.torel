@@ -1,0 +1,5 @@
+unit fixtures.operator_eq_mismatch;
+
+export proc main() -> Bool {
+    1 == true
+}

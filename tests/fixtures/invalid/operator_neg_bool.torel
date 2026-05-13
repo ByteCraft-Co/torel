@@ -1,0 +1,5 @@
+unit fixtures.operator_neg_bool;
+
+export proc main() -> Int32 {
+    -true
+}

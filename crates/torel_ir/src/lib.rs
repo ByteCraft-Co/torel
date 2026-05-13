@@ -1,6 +1,6 @@
 use torel_ast::{
-    BindingKind, Block, Expr, ExprKind, Item, Path, ProcDecl, SourceFile, Stmt, StmtKind, TypeRef,
-    Visibility,
+    BinaryOp, BindingKind, Block, Expr, ExprKind, Item, Path, ProcDecl, SourceFile, Stmt, StmtKind,
+    TypeRef, UnaryOp, Visibility,
 };
 use torel_diagnostics::Span;
 
@@ -117,7 +117,21 @@ pub enum HirExprKind {
     Int(String),
     Text(String),
     Bool(bool),
-    Call { callee: HirPath, args: Vec<HirExpr> },
+    Call {
+        callee: HirPath,
+        args: Vec<HirExpr>,
+    },
+    Unary {
+        op: UnaryOp,
+        op_span: Span,
+        expr: Box<HirExpr>,
+    },
+    Binary {
+        op: BinaryOp,
+        op_span: Span,
+        lhs: Box<HirExpr>,
+        rhs: Box<HirExpr>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -130,6 +144,40 @@ pub enum HirVisibility {
 pub enum Mutability {
     Immutable,
     Mutable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IntOverflowMode {
+    Checked,
+    Wrapping,
+    Saturating,
+    Trapping,
+    Optional,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypedUnaryOp {
+    BoolNot,
+    IntNeg { overflow: IntOverflowMode },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypedBinaryOp {
+    IntAdd { overflow: IntOverflowMode },
+    IntSub { overflow: IntOverflowMode },
+    IntMul { overflow: IntOverflowMode },
+    IntDiv,
+    IntRem,
+    IntEq,
+    IntNotEq,
+    IntLt,
+    IntLtEq,
+    IntGt,
+    IntGtEq,
+    BoolAnd,
+    BoolOr,
+    SameTypeEq,
+    SameTypeNotEq,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -217,6 +265,15 @@ pub enum TypedExprKind {
     Call {
         callee: ProcId,
         args: Vec<TypedExpr>,
+    },
+    Unary {
+        op: TypedUnaryOp,
+        expr: Box<TypedExpr>,
+    },
+    Binary {
+        op: TypedBinaryOp,
+        lhs: Box<TypedExpr>,
+        rhs: Box<TypedExpr>,
     },
 }
 
@@ -345,6 +402,22 @@ fn lower_expr(expr: &Expr) -> HirExpr {
         ExprKind::Call { callee, args } => HirExprKind::Call {
             callee: lower_path(callee),
             args: args.iter().map(lower_expr).collect(),
+        },
+        ExprKind::Unary { op, op_span, expr } => HirExprKind::Unary {
+            op: *op,
+            op_span: *op_span,
+            expr: Box::new(lower_expr(expr)),
+        },
+        ExprKind::Binary {
+            op,
+            op_span,
+            lhs,
+            rhs,
+        } => HirExprKind::Binary {
+            op: *op,
+            op_span: *op_span,
+            lhs: Box::new(lower_expr(lhs)),
+            rhs: Box::new(lower_expr(rhs)),
         },
     };
 

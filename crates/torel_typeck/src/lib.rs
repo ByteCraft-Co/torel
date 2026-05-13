@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 
 use thiserror::Error;
+use torel_ast::{BinaryOp, UnaryOp};
 use torel_diagnostics::{Diagnostic, Label, Span};
 use torel_ir::{
     HirBindingKind, HirBlock, HirExpr, HirExprKind, HirModule, HirParam, HirPath, HirProc, HirStmt,
-    HirStmtKind, HirTypeRef, LocalId, Mutability, ProcId, ResolvedValue, SymbolCounts, TypeId,
-    TypedBlock, TypedExpr, TypedExprKind, TypedModule, TypedParam, TypedProc, TypedStmt,
-    TypedStmtKind, TypedTypeRef, ValueId,
+    HirStmtKind, HirTypeRef, IntOverflowMode, LocalId, Mutability, ProcId, ResolvedValue,
+    SymbolCounts, TypeId, TypedBinaryOp, TypedBlock, TypedExpr, TypedExprKind, TypedModule,
+    TypedParam, TypedProc, TypedStmt, TypedStmtKind, TypedTypeRef, TypedUnaryOp, ValueId,
 };
 
 #[derive(Debug, Error)]
@@ -53,6 +54,21 @@ pub enum TypeckError {
 
     #[error("if condition type mismatch: expected `Bool`, found `{found}`")]
     IfConditionTypeMismatch { found: String, span: Span },
+
+    #[error("operator `{op}` cannot be applied to `{found}`")]
+    UnaryOperatorTypeMismatch {
+        op: &'static str,
+        found: String,
+        span: Span,
+    },
+
+    #[error("operator `{op}` cannot be applied to `{left}` and `{right}`")]
+    BinaryOperatorTypeMismatch {
+        op: &'static str,
+        left: String,
+        right: String,
+        span: Span,
+    },
 
     #[error("unknown procedure `{name}`")]
     UnknownProc { name: String, span: Span },
@@ -112,6 +128,9 @@ impl TypeckError {
             Self::AssignTypeMismatch { .. } => "assigned value has this type",
             Self::InvalidAssignmentTarget { .. } => "invalid assignment target",
             Self::IfConditionTypeMismatch { .. } => "condition has this type",
+            Self::UnaryOperatorTypeMismatch { .. } | Self::BinaryOperatorTypeMismatch { .. } => {
+                "operator cannot be applied here"
+            }
             Self::UnknownProc { .. } => "unknown procedure",
             Self::NotCallable { .. } => "not callable",
             Self::ProcedureUsedAsValue { .. } => "procedure used as value",
@@ -137,6 +156,8 @@ impl TypeckError {
             | Self::AssignTypeMismatch { span, .. }
             | Self::InvalidAssignmentTarget { span, .. }
             | Self::IfConditionTypeMismatch { span, .. }
+            | Self::UnaryOperatorTypeMismatch { span, .. }
+            | Self::BinaryOperatorTypeMismatch { span, .. }
             | Self::UnknownProc { span, .. }
             | Self::NotCallable { span, .. }
             | Self::ProcedureUsedAsValue { span, .. }
@@ -710,7 +731,128 @@ fn check_expr(
         HirExprKind::Call { callee, args } => {
             check_call_expr(symbols, locals, callee, args, expr.span)
         }
+        HirExprKind::Unary { op, op_span, expr } => {
+            check_unary_expr(symbols, locals, *op, *op_span, expr, expr.span)
+        }
+        HirExprKind::Binary {
+            op,
+            op_span,
+            lhs,
+            rhs,
+        } => check_binary_expr(symbols, locals, *op, *op_span, lhs, rhs, expr.span),
     }
+}
+
+fn check_unary_expr(
+    symbols: &SymbolTable,
+    locals: &HashMap<String, LocalSymbol>,
+    op: UnaryOp,
+    op_span: Span,
+    expr: &HirExpr,
+    span: Span,
+) -> Result<TypedExpr, TypeckError> {
+    let expr = check_expr(symbols, locals, expr)?;
+    let found = expr.ty;
+    let int32 = symbols.builtin_type("Int32");
+    let bool_type = symbols.builtin_type("Bool");
+
+    let (typed_op, ty) = match (op, found) {
+        (UnaryOp::Not, found) if found == bool_type => (TypedUnaryOp::BoolNot, bool_type),
+        (UnaryOp::Neg, found) if found == int32 => (
+            TypedUnaryOp::IntNeg {
+                overflow: IntOverflowMode::Checked,
+            },
+            int32,
+        ),
+        _ => {
+            return Err(TypeckError::UnaryOperatorTypeMismatch {
+                op: op.symbol(),
+                found: symbols.type_name(found),
+                span: op_span,
+            });
+        }
+    };
+
+    Ok(TypedExpr {
+        kind: TypedExprKind::Unary {
+            op: typed_op,
+            expr: Box::new(expr),
+        },
+        ty,
+        span,
+    })
+}
+
+fn check_binary_expr(
+    symbols: &SymbolTable,
+    locals: &HashMap<String, LocalSymbol>,
+    op: BinaryOp,
+    op_span: Span,
+    lhs: &HirExpr,
+    rhs: &HirExpr,
+    span: Span,
+) -> Result<TypedExpr, TypeckError> {
+    let lhs = check_expr(symbols, locals, lhs)?;
+    let rhs = check_expr(symbols, locals, rhs)?;
+    let left = lhs.ty;
+    let right = rhs.ty;
+    let int32 = symbols.builtin_type("Int32");
+    let bool_type = symbols.builtin_type("Bool");
+
+    let (typed_op, ty) = match op {
+        BinaryOp::Add if left == int32 && right == int32 => (
+            TypedBinaryOp::IntAdd {
+                overflow: IntOverflowMode::Checked,
+            },
+            int32,
+        ),
+        BinaryOp::Sub if left == int32 && right == int32 => (
+            TypedBinaryOp::IntSub {
+                overflow: IntOverflowMode::Checked,
+            },
+            int32,
+        ),
+        BinaryOp::Mul if left == int32 && right == int32 => (
+            TypedBinaryOp::IntMul {
+                overflow: IntOverflowMode::Checked,
+            },
+            int32,
+        ),
+        BinaryOp::Div if left == int32 && right == int32 => (TypedBinaryOp::IntDiv, int32),
+        BinaryOp::Rem if left == int32 && right == int32 => (TypedBinaryOp::IntRem, int32),
+        BinaryOp::Lt if left == int32 && right == int32 => (TypedBinaryOp::IntLt, bool_type),
+        BinaryOp::LtEq if left == int32 && right == int32 => (TypedBinaryOp::IntLtEq, bool_type),
+        BinaryOp::Gt if left == int32 && right == int32 => (TypedBinaryOp::IntGt, bool_type),
+        BinaryOp::GtEq if left == int32 && right == int32 => (TypedBinaryOp::IntGtEq, bool_type),
+        BinaryOp::Eq if left == int32 && right == int32 => (TypedBinaryOp::IntEq, bool_type),
+        BinaryOp::NotEq if left == int32 && right == int32 => (TypedBinaryOp::IntNotEq, bool_type),
+        BinaryOp::Eq if left == right => (TypedBinaryOp::SameTypeEq, bool_type),
+        BinaryOp::NotEq if left == right => (TypedBinaryOp::SameTypeNotEq, bool_type),
+        BinaryOp::And if left == bool_type && right == bool_type => {
+            (TypedBinaryOp::BoolAnd, bool_type)
+        }
+        BinaryOp::Or if left == bool_type && right == bool_type => {
+            (TypedBinaryOp::BoolOr, bool_type)
+        }
+        _ => {
+            return Err(TypeckError::BinaryOperatorTypeMismatch {
+                op: op.symbol(),
+                left: symbols.type_name(left),
+                right: symbols.type_name(right),
+                span: op_span,
+            });
+        }
+    };
+
+    Ok(TypedExpr {
+        kind: TypedExprKind::Binary {
+            op: typed_op,
+            lhs: Box::new(lhs),
+            rhs: Box::new(rhs),
+        },
+        ty,
+        span,
+    })
 }
 
 fn check_path_expr(
@@ -915,7 +1057,7 @@ mod tests {
     use super::*;
     use torel_ir::{
         HirBlock, HirExpr, HirExprKind, HirPath, HirProc, HirStmt, HirStmtKind, HirTypeRef,
-        HirVisibility,
+        HirVisibility, lower_ast,
     };
 
     #[test]
@@ -959,5 +1101,97 @@ mod tests {
         assert_eq!(typed.symbols.values, 1);
         assert_eq!(typed.symbols.procs, 1);
         assert_eq!(typed.procs[0].return_type.display_name, "Exit");
+    }
+
+    #[test]
+    fn checks_int_add_type() {
+        let expr = checked_tail("Int32", "1 + 2");
+        assert_eq!(expr.ty, SymbolTable::with_builtins().builtin_type("Int32"));
+        assert!(matches!(
+            expr.kind,
+            TypedExprKind::Binary {
+                op: TypedBinaryOp::IntAdd { .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn checks_int_comparison_type() {
+        let expr = checked_tail("Bool", "1 < 2");
+        assert_eq!(expr.ty, SymbolTable::with_builtins().builtin_type("Bool"));
+        assert!(matches!(
+            expr.kind,
+            TypedExprKind::Binary {
+                op: TypedBinaryOp::IntLt,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn checks_bool_and_type() {
+        let expr = checked_tail("Bool", "true && false");
+        assert_eq!(expr.ty, SymbolTable::with_builtins().builtin_type("Bool"));
+        assert!(matches!(
+            expr.kind,
+            TypedExprKind::Binary {
+                op: TypedBinaryOp::BoolAnd,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn checks_unary_types() {
+        let not_expr = checked_tail("Bool", "!false");
+        assert!(matches!(
+            not_expr.kind,
+            TypedExprKind::Unary {
+                op: TypedUnaryOp::BoolNot,
+                ..
+            }
+        ));
+
+        let neg_expr = checked_tail("Int32", "-42");
+        assert!(matches!(
+            neg_expr.kind,
+            TypedExprKind::Unary {
+                op: TypedUnaryOp::IntNeg { .. },
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn rejects_mismatched_binary_operands() {
+        let err = check_source("Bool", "1 == true").expect_err("mismatch should fail");
+
+        assert!(matches!(
+            err,
+            TypeckError::BinaryOperatorTypeMismatch {
+                op: "==",
+                left,
+                right,
+                ..
+            } if left == "Int32" && right == "Bool"
+        ));
+    }
+
+    fn checked_tail(return_type: &str, body: &str) -> TypedExpr {
+        let typed = check_source(return_type, body).expect("type checking should pass");
+        typed.procs[0]
+            .body
+            .tail
+            .clone()
+            .expect("tail expression should exist")
+    }
+
+    fn check_source(return_type: &str, body: &str) -> Result<TypedModule, TypeckError> {
+        let source = format!("unit tests.ops; export proc main() -> {return_type} {{ {body} }}");
+        let tokens = torel_lexer::lex(&source);
+        let ast = torel_parse::parse_source_file(&tokens).expect("source should parse");
+        let hir = lower_ast(&ast);
+        check_types(&hir)
     }
 }

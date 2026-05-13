@@ -38,7 +38,11 @@ fn stderr(output: &Output) -> String {
 }
 
 fn assert_emit_matches_golden(emit: &str, expected: &str) {
-    let output = run_torelc(&["examples/hello.torel", "--emit", emit]);
+    assert_emit_file_matches_golden("examples/hello.torel", emit, expected);
+}
+
+fn assert_emit_file_matches_golden(path: &str, emit: &str, expected: &str) {
+    let output = run_torelc(&[path, "--emit", emit]);
 
     assert_eq!(stdout(output), expected);
 }
@@ -62,6 +66,17 @@ fn assert_failure(path: &str, expected: &str) {
     );
 }
 
+fn assert_success(path: &str) {
+    let output = run_torelc(&[path, "--emit", "check"]);
+
+    assert!(
+        output.status.success(),
+        "{path} should pass\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn emits_tokens_golden() {
     assert_emit_matches_golden(
@@ -78,6 +93,24 @@ fn emits_ast_golden() {
 #[test]
 fn emits_hir_golden() {
     assert_emit_matches_golden("hir", include_str!("../../../tests/golden/hello.hir.txt"));
+}
+
+#[test]
+fn emits_operator_precedence_ast_golden() {
+    assert_emit_file_matches_golden(
+        "tests/fixtures/valid/operator_precedence.torel",
+        "ast",
+        include_str!("../../../tests/golden/operator_precedence.ast.txt"),
+    );
+}
+
+#[test]
+fn emits_operator_precedence_hir_golden() {
+    assert_emit_file_matches_golden(
+        "tests/fixtures/valid/operator_precedence.torel",
+        "hir",
+        include_str!("../../../tests/golden/operator_precedence.hir.txt"),
+    );
 }
 
 #[test]
@@ -317,6 +350,24 @@ fn checks_valid_final_expr_if_with_returns_fixture() {
 }
 
 #[test]
+fn checks_valid_operator_fixtures() {
+    for path in [
+        "tests/fixtures/valid/operator_add_int.torel",
+        "tests/fixtures/valid/operator_precedence.torel",
+        "tests/fixtures/valid/operator_parentheses.torel",
+        "tests/fixtures/valid/operator_comparison.torel",
+        "tests/fixtures/valid/operator_bool_logic.torel",
+        "tests/fixtures/valid/operator_unary_not.torel",
+        "tests/fixtures/valid/operator_unary_minus.torel",
+        "tests/fixtures/valid/if_comparison_condition.torel",
+        "tests/fixtures/valid/slot_assign_binary_expr.torel",
+        "tests/fixtures/valid/final_expr_binary_expr.torel",
+    ] {
+        assert_success(path);
+    }
+}
+
+#[test]
 fn rejects_trailing_junk_fixture() {
     assert_failure(
         "tests/fixtures/invalid/trailing_junk.torel",
@@ -490,6 +541,46 @@ fn rejects_branch_local_does_not_escape() {
         "tests/fixtures/invalid/branch_local_does_not_escape.torel",
         "error: unknown local `answer`\n",
     );
+}
+
+#[test]
+fn rejects_invalid_operator_fixtures() {
+    for (path, expected) in [
+        (
+            "tests/fixtures/invalid/operator_add_bool_int.torel",
+            "error: operator `+` cannot be applied to `Bool` and `Int32`\n",
+        ),
+        (
+            "tests/fixtures/invalid/operator_add_exit.torel",
+            "error: operator `+` cannot be applied to `Exit` and `Exit`\n",
+        ),
+        (
+            "tests/fixtures/invalid/operator_and_int_bool.torel",
+            "error: operator `&&` cannot be applied to `Int32` and `Bool`\n",
+        ),
+        (
+            "tests/fixtures/invalid/operator_not_int.torel",
+            "error: operator `!` cannot be applied to `Int32`\n",
+        ),
+        (
+            "tests/fixtures/invalid/operator_neg_bool.torel",
+            "error: operator `-` cannot be applied to `Bool`\n",
+        ),
+        (
+            "tests/fixtures/invalid/operator_compare_bool.torel",
+            "error: operator `<` cannot be applied to `Bool` and `Bool`\n",
+        ),
+        (
+            "tests/fixtures/invalid/operator_eq_mismatch.torel",
+            "error: operator `==` cannot be applied to `Int32` and `Bool`\n",
+        ),
+        (
+            "tests/fixtures/invalid/operator_precedence_type_error.torel",
+            "error: operator `*` cannot be applied to `Bool` and `Int32`\n",
+        ),
+    ] {
+        assert_failure(path, expected);
+    }
 }
 
 #[test]

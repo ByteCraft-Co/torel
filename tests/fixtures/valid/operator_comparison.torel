@@ -1,0 +1,5 @@
+unit fixtures.operator_comparison;
+
+export proc main() -> Bool {
+    40 + 2 == 42
+}

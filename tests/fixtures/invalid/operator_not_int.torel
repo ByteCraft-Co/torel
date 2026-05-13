@@ -1,0 +1,5 @@
+unit fixtures.operator_not_int;
+
+export proc main() -> Bool {
+    !1
+}

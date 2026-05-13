@@ -17,6 +17,20 @@ pub enum TokenKind<'src> {
     Comma,
     Colon,
     Equal,
+    EqualEqual,
+    BangEqual,
+    Plus,
+    Minus,
+    Star,
+    Slash,
+    Percent,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
+    AmpAmp,
+    PipePipe,
+    Bang,
     LBrace,
     RBrace,
     LParen,
@@ -86,7 +100,11 @@ impl<'src> Lexer<'src> {
             ';' => self.single(TokenKind::Semicolon),
             ',' => self.single(TokenKind::Comma),
             ':' => self.single(TokenKind::Colon),
+            '=' if self.peek_next_char() == Some('=') => self.double(TokenKind::EqualEqual),
             '=' => self.single(TokenKind::Equal),
+            '!' if self.peek_next_char() == Some('=') => self.double(TokenKind::BangEqual),
+            '!' => self.single(TokenKind::Bang),
+            '+' => self.single(TokenKind::Plus),
             '{' => self.single(TokenKind::LBrace),
             '}' => self.single(TokenKind::RBrace),
             '(' => self.single(TokenKind::LParen),
@@ -96,6 +114,16 @@ impl<'src> Lexer<'src> {
                 self.bump_char();
                 TokenKind::Arrow
             }
+            '-' => self.single(TokenKind::Minus),
+            '*' => self.single(TokenKind::Star),
+            '/' => self.single(TokenKind::Slash),
+            '%' => self.single(TokenKind::Percent),
+            '<' if self.peek_next_char() == Some('=') => self.double(TokenKind::LessEqual),
+            '<' => self.single(TokenKind::Less),
+            '>' if self.peek_next_char() == Some('=') => self.double(TokenKind::GreaterEqual),
+            '>' => self.single(TokenKind::Greater),
+            '&' if self.peek_next_char() == Some('&') => self.double(TokenKind::AmpAmp),
+            '|' if self.peek_next_char() == Some('|') => self.double(TokenKind::PipePipe),
             '"' => self.text_literal(),
             '0'..='9' => self.number(),
             ch if is_ident_start(ch) => self.ident_or_keyword(),
@@ -115,6 +143,12 @@ impl<'src> Lexer<'src> {
     }
 
     fn single(&mut self, kind: TokenKind<'src>) -> TokenKind<'src> {
+        self.bump_char();
+        kind
+    }
+
+    fn double(&mut self, kind: TokenKind<'src>) -> TokenKind<'src> {
+        self.bump_char();
         self.bump_char();
         kind
     }

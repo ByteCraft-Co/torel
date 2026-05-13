@@ -1,0 +1,5 @@
+unit fixtures.operator_precedence_type_error;
+
+export proc main() -> Int32 {
+    1 + true * 3
+}

@@ -1,0 +1,96 @@
+HirModule {
+    unit_path: Some(
+        [
+            "fixtures",
+            "operator_precedence",
+        ],
+    ),
+    procs: [
+        HirProc {
+            visibility: Export,
+            name: "main",
+            name_span: Span {
+                start: 48,
+                end: 52,
+            },
+            params: [],
+            return_type: HirTypeRef {
+                path: HirPath {
+                    segments: [
+                        "Int32",
+                    ],
+                    span: Span {
+                        start: 58,
+                        end: 63,
+                    },
+                },
+            },
+            body: HirBlock {
+                stmts: [],
+                tail: Some(
+                    HirExpr {
+                        kind: Binary {
+                            op: Add,
+                            op_span: Span {
+                                start: 72,
+                                end: 73,
+                            },
+                            lhs: HirExpr {
+                                kind: Int(
+                                    "1",
+                                ),
+                                span: Span {
+                                    start: 70,
+                                    end: 71,
+                                },
+                            },
+                            rhs: HirExpr {
+                                kind: Binary {
+                                    op: Mul,
+                                    op_span: Span {
+                                        start: 76,
+                                        end: 77,
+                                    },
+                                    lhs: HirExpr {
+                                        kind: Int(
+                                            "2",
+                                        ),
+                                        span: Span {
+                                            start: 74,
+                                            end: 75,
+                                        },
+                                    },
+                                    rhs: HirExpr {
+                                        kind: Int(
+                                            "3",
+                                        ),
+                                        span: Span {
+                                            start: 78,
+                                            end: 79,
+                                        },
+                                    },
+                                },
+                                span: Span {
+                                    start: 74,
+                                    end: 79,
+                                },
+                            },
+                        },
+                        span: Span {
+                            start: 70,
+                            end: 79,
+                        },
+                    },
+                ),
+                span: Span {
+                    start: 64,
+                    end: 81,
+                },
+            },
+            span: Span {
+                start: 43,
+                end: 81,
+            },
+        },
+    ],
+}

@@ -1,0 +1,5 @@
+unit fixtures.operator_unary_minus;
+
+export proc main() -> Int32 {
+    -42
+}

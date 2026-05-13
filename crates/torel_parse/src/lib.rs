@@ -1,6 +1,7 @@
+use torel_ast::BinaryOp;
 use torel_ast::{
     BindingKind, Block, Expr, ExprKind, Item, Param, Path, ProcDecl, SourceFile, Stmt, StmtKind,
-    TypeRef, UnitDecl, Visibility,
+    TypeRef, UnaryOp, UnitDecl, Visibility,
 };
 use torel_diagnostics::{Diagnostic, Label};
 use torel_lexer::{Keyword, Span, Token, TokenKind};
@@ -255,6 +256,57 @@ impl Parser<'_, '_> {
     }
 
     fn expr(&mut self) -> Result<Expr, ParseError> {
+        self.expr_bp(0)
+    }
+
+    fn expr_bp(&mut self, min_bp: u8) -> Result<Expr, ParseError> {
+        let mut lhs = self.prefix_expr()?;
+
+        while let Some((op, left_bp, right_bp)) = self.current_binary_op() {
+            if left_bp < min_bp {
+                break;
+            }
+
+            let op_span = self.current_span().expect("operator should have span");
+            self.cursor += 1;
+            let rhs = self.expr_bp(right_bp)?;
+            let span = lhs.span.join(rhs.span);
+
+            lhs = Expr {
+                kind: ExprKind::Binary {
+                    op,
+                    op_span,
+                    lhs: Box::new(lhs),
+                    rhs: Box::new(rhs),
+                },
+                span,
+            };
+        }
+
+        Ok(lhs)
+    }
+
+    fn prefix_expr(&mut self) -> Result<Expr, ParseError> {
+        if let Some(op) = self.current_unary_op() {
+            let op_span = self.current_span().expect("operator should have span");
+            self.cursor += 1;
+            let expr = self.expr_bp(13)?;
+            let span = op_span.join(expr.span);
+
+            return Ok(Expr {
+                kind: ExprKind::Unary {
+                    op,
+                    op_span,
+                    expr: Box::new(expr),
+                },
+                span,
+            });
+        }
+
+        self.primary_expr()
+    }
+
+    fn primary_expr(&mut self) -> Result<Expr, ParseError> {
         match self.peek() {
             Some(TokenKind::Int(value)) => {
                 let value = (*value).to_owned();
@@ -290,6 +342,13 @@ impl Parser<'_, '_> {
                     span,
                 });
             }
+            Some(TokenKind::LParen) => {
+                let start = self.expect(TokenKind::LParen)?;
+                let mut expr = self.expr()?;
+                let end = self.expect(TokenKind::RParen)?;
+                expr.span = start.join(end);
+                return Ok(expr);
+            }
             _ => {}
         }
 
@@ -306,6 +365,33 @@ impl Parser<'_, '_> {
                 span: path.span,
                 kind: ExprKind::Path(path),
             })
+        }
+    }
+
+    fn current_unary_op(&self) -> Option<UnaryOp> {
+        match self.peek()? {
+            TokenKind::Bang => Some(UnaryOp::Not),
+            TokenKind::Minus => Some(UnaryOp::Neg),
+            _ => None,
+        }
+    }
+
+    fn current_binary_op(&self) -> Option<(BinaryOp, u8, u8)> {
+        match self.peek()? {
+            TokenKind::PipePipe => Some((BinaryOp::Or, 1, 2)),
+            TokenKind::AmpAmp => Some((BinaryOp::And, 3, 4)),
+            TokenKind::EqualEqual => Some((BinaryOp::Eq, 5, 6)),
+            TokenKind::BangEqual => Some((BinaryOp::NotEq, 5, 6)),
+            TokenKind::Less => Some((BinaryOp::Lt, 7, 8)),
+            TokenKind::LessEqual => Some((BinaryOp::LtEq, 7, 8)),
+            TokenKind::Greater => Some((BinaryOp::Gt, 7, 8)),
+            TokenKind::GreaterEqual => Some((BinaryOp::GtEq, 7, 8)),
+            TokenKind::Plus => Some((BinaryOp::Add, 9, 10)),
+            TokenKind::Minus => Some((BinaryOp::Sub, 9, 10)),
+            TokenKind::Star => Some((BinaryOp::Mul, 11, 12)),
+            TokenKind::Slash => Some((BinaryOp::Div, 11, 12)),
+            TokenKind::Percent => Some((BinaryOp::Rem, 11, 12)),
+            _ => None,
         }
     }
 
@@ -361,6 +447,9 @@ impl Parser<'_, '_> {
                 TokenKind::Ident(_)
                     | TokenKind::Int(_)
                     | TokenKind::Text(_)
+                    | TokenKind::LParen
+                    | TokenKind::Bang
+                    | TokenKind::Minus
                     | TokenKind::Keyword(Keyword::True | Keyword::False)
             )
         )
@@ -653,6 +742,125 @@ mod tests {
             panic!("tail should be a path");
         };
         assert_eq!(path.segments, vec!["answer".to_owned()]);
+    }
+
+    #[test]
+    fn parses_binary_precedence() {
+        let expr = parse_tail_expr("1 + 2 * 3");
+        let ExprKind::Binary {
+            op: BinaryOp::Add,
+            lhs,
+            rhs,
+            ..
+        } = &expr.kind
+        else {
+            panic!("tail should be addition");
+        };
+
+        assert_eq!(lhs.kind, ExprKind::Int("1".to_owned()));
+        assert!(matches!(
+            rhs.kind,
+            ExprKind::Binary {
+                op: BinaryOp::Mul,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parses_parenthesized_precedence() {
+        let expr = parse_tail_expr("(1 + 2) * 3");
+        let ExprKind::Binary {
+            op: BinaryOp::Mul,
+            lhs,
+            rhs,
+            ..
+        } = &expr.kind
+        else {
+            panic!("tail should be multiplication");
+        };
+
+        assert!(matches!(
+            lhs.kind,
+            ExprKind::Binary {
+                op: BinaryOp::Add,
+                ..
+            }
+        ));
+        assert_eq!(rhs.kind, ExprKind::Int("3".to_owned()));
+    }
+
+    #[test]
+    fn parses_unary_expressions() {
+        assert!(matches!(
+            parse_tail_expr("!false").kind,
+            ExprKind::Unary {
+                op: UnaryOp::Not,
+                ..
+            }
+        ));
+        assert!(matches!(
+            parse_tail_expr("-42").kind,
+            ExprKind::Unary {
+                op: UnaryOp::Neg,
+                ..
+            }
+        ));
+    }
+
+    #[test]
+    fn parses_operator_args_and_if_condition() {
+        let call = parse_tail_expr("foo(1 + 2, true && false)");
+        let ExprKind::Call { args, .. } = &call.kind else {
+            panic!("tail should be a call");
+        };
+        assert!(matches!(
+            args[0].kind,
+            ExprKind::Binary {
+                op: BinaryOp::Add,
+                ..
+            }
+        ));
+        assert!(matches!(
+            args[1].kind,
+            ExprKind::Binary {
+                op: BinaryOp::And,
+                ..
+            }
+        ));
+
+        let tokens = lex(r#"
+            unit app.branching;
+
+            export proc main() -> Int32 {
+                if 1 < 2 {
+                    10
+                } else {
+                    20
+                }
+            }
+            "#);
+        let file = parse_source_file(&tokens).expect("source file should parse");
+        let Item::Proc(proc) = &file.items[0];
+        let StmtKind::If { condition, .. } = &proc.body.stmts[0].kind else {
+            panic!("first statement should be if");
+        };
+
+        assert!(matches!(
+            condition.kind,
+            ExprKind::Binary {
+                op: BinaryOp::Lt,
+                ..
+            }
+        ));
+    }
+
+    fn parse_tail_expr(source: &str) -> Expr {
+        let source = format!("unit app.expr; export proc main() -> Int32 {{ {source} }}");
+        let tokens = lex(&source);
+        let file = parse_source_file(&tokens).expect("source file should parse");
+        let Item::Proc(proc) = &file.items[0];
+        proc.body.tail.clone().expect("tail expression")
     }
 
     #[test]

@@ -1,0 +1,5 @@
+unit fixtures.operator_compare_bool;
+
+export proc main() -> Bool {
+    true < false
+}

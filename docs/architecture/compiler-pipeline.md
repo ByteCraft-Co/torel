@@ -37,13 +37,15 @@ source
 The pipeline is executable but intentionally skeletal:
 
 - the lexer recognizes the first core tokens needed by examples
-- the parser accepts a `unit` declaration, the first top-level `proc` shape, `fix`/`slot` bindings, assignment statements, `if`/`else` statements, returns, final block expressions, paths, literals, and procedure calls
+- the parser accepts a `unit` declaration, the first top-level `proc` shape, `fix`/`slot` bindings, assignment statements, `if`/`else` statements, returns, final block expressions, paths, literals, procedure calls, parenthesized expressions, and unary/binary operators with Pratt-parsed precedence
 - AST, HIR, and typed IR preserve source spans for diagnostic reporting
 - HIR preserves unit identity and procedure structure
 - type checking has built-in symbols for `Exit`, `Void`, `Bool`, `Int32`, `UInt64`, `Text`, `Never`, and `Exit.ok`
 - typed IR records resolved type IDs, value IDs, proc IDs, and local IDs
 - procedure symbols carry parameter and return types for call checking
 - literals type as `Int32`, `Text`, and `Bool`
+- unary and binary operators type-check strictly for `Int32` arithmetic/comparison, same-type equality, and `Bool` logic
+- typed operator IR records checked integer overflow intent for arithmetic operations
 - `fix` and `slot` bindings resolve declared types, check initializer types, and add locals for later statements
 - assignments resolve mutable local targets and check assigned expression types
 - `if`/`else` statements require `Bool` conditions, type-check branch blocks, keep branch-local bindings scoped to their branch, and participate in guaranteed-return analysis
