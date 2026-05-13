@@ -74,10 +74,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("{}", output.text);
             println!(
-                "pipeline: source -> lexer -> parser -> AST -> HIR/typed IR -> type/effect/failure/ownership checks -> codegen"
+                "pipeline: source -> lexer -> parser -> AST -> HIR -> name resolution -> typed IR -> type/return checks -> effect/failure/ownership checks -> codegen"
             );
             println!(
-                "checks: effects={} failures={} ownership_regions={}",
+                "checks: types={} effects={} failures={} ownership_regions={}",
+                typed.procs.len(),
                 effects.checked_effect_sets,
                 failures.checked_failure_sets,
                 ownership.checked_owner_regions

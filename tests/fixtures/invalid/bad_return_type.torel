@@ -1,0 +1,5 @@
+unit fixtures.bad_return_type;
+
+export proc main() -> Int32 {
+    return Exit.ok;
+}

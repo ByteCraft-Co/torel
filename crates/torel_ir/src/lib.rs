@@ -10,7 +10,27 @@ pub struct HirModule {
 pub struct TypedModule {
     pub unit_path: Option<Vec<String>>,
     pub procs: Vec<TypedProc>,
+    pub symbols: SymbolCounts,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SymbolCounts {
+    pub types: usize,
+    pub values: usize,
+    pub procs: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct TypeId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ProcId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ValueId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LocalId(pub u32);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HirProc {
@@ -55,6 +75,7 @@ pub enum HirVisibility {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedProc {
+    pub id: ProcId,
     pub visibility: HirVisibility,
     pub name: String,
     pub params: Vec<TypedParam>,
@@ -64,13 +85,15 @@ pub struct TypedProc {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedParam {
+    pub id: LocalId,
     pub name: String,
     pub ty: TypedTypeRef,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedTypeRef {
-    pub path: Vec<String>,
+    pub id: TypeId,
+    pub display_name: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,7 +108,18 @@ pub enum TypedStmt {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypedExpr {
-    Path(Vec<String>),
+    Path {
+        path: Vec<String>,
+        ty: TypeId,
+        resolved: ResolvedValue,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedValue {
+    BuiltinValue(ValueId),
+    Proc(ProcId),
+    Local(LocalId),
 }
 
 #[must_use]

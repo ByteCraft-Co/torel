@@ -1,0 +1,4 @@
+unit fixtures.missing_return;
+
+export proc main() -> Exit {
+}

@@ -24,13 +24,15 @@ pub fn codegen(module: &TypedModule, target: CodegenTarget) -> Result<CodegenOut
         CodegenTarget::CheckOnly => Ok(CodegenOutput {
             target,
             text: format!(
-                "check-only module unit={} procs={}",
+                "check-only module unit={} procs={} types={} values={}",
                 module
                     .unit_path
                     .as_ref()
                     .map(|path| path.join("."))
                     .unwrap_or_else(|| "<anonymous>".to_owned()),
-                module.procs.len()
+                module.procs.len(),
+                module.symbols.types,
+                module.symbols.values
             ),
         }),
         CodegenTarget::LlvmIr => Err(CodegenError::LlvmNotImplemented),
@@ -46,6 +48,11 @@ mod tests {
         let module = TypedModule {
             unit_path: Some(vec!["examples".to_owned(), "hello".to_owned()]),
             procs: Vec::new(),
+            symbols: torel_ir::SymbolCounts {
+                types: 7,
+                values: 1,
+                procs: 0,
+            },
         };
 
         let output = codegen(&module, CodegenTarget::CheckOnly).expect("check-only codegen");

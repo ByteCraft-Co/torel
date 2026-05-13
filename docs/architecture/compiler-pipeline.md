@@ -7,8 +7,11 @@ source
   -> lexer
   -> parser
   -> AST
-  -> HIR/typed IR
-  -> type/effect/failure checks
+  -> HIR
+  -> name resolution
+  -> typed IR
+  -> type/return checks
+  -> effect/failure checks
   -> ownership checks
   -> codegen
 ```
@@ -21,8 +24,9 @@ source
 | Lexer | `torel_lexer` | Convert source text into tokens with spans. |
 | Parser | `torel_parse` | Convert tokens into the surface AST. |
 | AST | `torel_ast` | Represent source syntax close to what the user wrote. |
-| HIR / typed IR | `torel_ir` | Lower syntax into compiler-owned semantic structures. |
-| Type checking | `torel_typeck` | Resolve and validate types. |
+| HIR | `torel_ir` | Lower syntax into compiler-owned semantic structures. |
+| Name resolution / typed IR | `torel_typeck` / `torel_ir` | Resolve names to stable IDs and produce typed IR. |
+| Type checking | `torel_typeck` | Validate declared types, expression types, and returns. |
 | Effect/failure checking | `torel_effects` | Validate declared effects and checked failure channels. |
 | Ownership checking | `torel_ownership` | Enforce ownership, moves, views, and arena escape rules. |
 | Code generation | `torel_codegen` | Lower checked IR toward LLVM and later MLIR/LLVM. |
@@ -33,7 +37,10 @@ The pipeline is executable but intentionally skeletal:
 
 - the lexer recognizes the first core tokens needed by examples
 - the parser accepts a `unit` declaration and the first top-level `proc` shape
-- HIR and typed IR preserve unit identity and procedure structure
+- HIR preserves unit identity and procedure structure
+- type checking has built-in symbols for `Exit`, `Void`, `Bool`, `Int32`, `UInt64`, `Text`, `Never`, and `Exit.ok`
+- typed IR records resolved type IDs, value IDs, proc IDs, and local IDs
+- the first semantic checks reject unknown types, unknown value paths, bad return types, and missing returns from non-`Void` procedures
 - type/effect/failure/ownership stages return reports
 - codegen supports a check-only summary and reserves LLVM IR for the next backend phase
 

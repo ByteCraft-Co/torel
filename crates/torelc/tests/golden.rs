@@ -31,10 +31,23 @@ fn stdout(output: Output) -> String {
         .replace("\r\n", "\n")
 }
 
+fn stderr(output: &Output) -> String {
+    String::from_utf8(output.stderr.clone())
+        .expect("stderr should be utf-8")
+        .replace("\r\n", "\n")
+}
+
 fn assert_emit_matches_golden(emit: &str, expected: &str) {
     let output = run_torelc(&["examples/hello.torel", "--emit", emit]);
 
     assert_eq!(stdout(output), expected);
+}
+
+fn assert_failure(path: &str, expected: &str) {
+    let output = run_torelc(&[path, "--emit", "check"]);
+
+    assert!(!output.status.success(), "{path} should fail");
+    assert_eq!(stderr(&output), expected);
 }
 
 #[test]
@@ -64,18 +77,48 @@ fn emits_check_golden() {
 }
 
 #[test]
-fn rejects_trailing_junk_fixture() {
-    let output = run_torelc(&["tests/fixtures/trailing_junk.torel", "--emit", "check"]);
+fn checks_valid_fixture() {
+    let output = run_torelc(&["tests/fixtures/valid/hello.torel", "--emit", "check"]);
 
-    assert!(!output.status.success(), "junk fixture should fail");
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("expected top-level item"),
-        "stderr should explain the parser failure:\n{}",
-        String::from_utf8_lossy(&output.stderr)
+    assert!(output.status.success(), "valid fixture should pass");
+}
+
+#[test]
+fn rejects_trailing_junk_fixture() {
+    assert_failure(
+        "tests/fixtures/invalid/trailing_junk.torel",
+        "error: expected top-level item at 30..31\n",
     );
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("at 30..31"),
-        "stderr should include the junk token span:\n{}",
-        String::from_utf8_lossy(&output.stderr)
+}
+
+#[test]
+fn rejects_unknown_return_type() {
+    assert_failure(
+        "tests/fixtures/invalid/unknown_return_type.torel",
+        "error: unknown type `Potato`\n",
+    );
+}
+
+#[test]
+fn rejects_unknown_return_value() {
+    assert_failure(
+        "tests/fixtures/invalid/unknown_return_value.torel",
+        "error: unknown value path `Exit.nope`\n",
+    );
+}
+
+#[test]
+fn rejects_bad_return_type() {
+    assert_failure(
+        "tests/fixtures/invalid/bad_return_type.torel",
+        "error: return type mismatch: expected `Int32`, found `Exit`\n",
+    );
+}
+
+#[test]
+fn rejects_missing_return() {
+    assert_failure(
+        "tests/fixtures/invalid/missing_return.torel",
+        "error: missing return from procedure `main`: expected `Exit`\n",
     );
 }

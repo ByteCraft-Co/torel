@@ -1,0 +1,5 @@
+unit fixtures.unknown_return_type;
+
+export proc main() -> Potato {
+    return Exit.ok;
+}
