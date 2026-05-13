@@ -1,0 +1,9 @@
+unit fixtures.arg_count_mismatch;
+
+proc id_exit(value: Exit) -> Exit {
+    return value;
+}
+
+export proc main() -> Exit {
+    return id_exit();
+}

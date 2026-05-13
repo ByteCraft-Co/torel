@@ -1,0 +1,9 @@
+unit fixtures.call_with_arg;
+
+proc id_exit(value: Exit) -> Exit {
+    return value;
+}
+
+export proc main() -> Exit {
+    return id_exit(Exit.ok);
+}

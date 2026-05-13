@@ -63,4 +63,8 @@ pub enum Stmt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     Path(Vec<String>),
+    Call {
+        callee: Vec<String>,
+        args: Vec<Expr>,
+    },
 }

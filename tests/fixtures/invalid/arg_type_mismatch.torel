@@ -1,0 +1,9 @@
+unit fixtures.arg_type_mismatch;
+
+proc id_i32(value: Int32) -> Int32 {
+    return value;
+}
+
+export proc main() -> Int32 {
+    return id_i32(Exit.ok);
+}

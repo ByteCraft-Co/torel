@@ -1,0 +1,9 @@
+unit fixtures.proc_used_as_value;
+
+proc make_exit() -> Exit {
+    return Exit.ok;
+}
+
+export proc main() -> Exit {
+    return make_exit;
+}

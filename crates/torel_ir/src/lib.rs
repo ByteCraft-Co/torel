@@ -65,6 +65,10 @@ pub enum HirStmt {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HirExpr {
     Path(Vec<String>),
+    Call {
+        callee: Vec<String>,
+        args: Vec<HirExpr>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,6 +116,11 @@ pub enum TypedExpr {
         path: Vec<String>,
         ty: TypeId,
         resolved: ResolvedValue,
+    },
+    Call {
+        callee: ProcId,
+        args: Vec<TypedExpr>,
+        ty: TypeId,
     },
 }
 
@@ -181,5 +190,9 @@ fn lower_stmt(stmt: &Stmt) -> HirStmt {
 fn lower_expr(expr: &Expr) -> HirExpr {
     match expr {
         Expr::Path(path) => HirExpr::Path(path.clone()),
+        Expr::Call { callee, args } => HirExpr::Call {
+            callee: callee.clone(),
+            args: args.iter().map(lower_expr).collect(),
+        },
     }
 }

@@ -147,7 +147,35 @@ impl Parser<'_, '_> {
     }
 
     fn expr(&mut self) -> Result<Expr, ParseError> {
-        Ok(Expr::Path(self.path()?))
+        let path = self.path()?;
+
+        if self.eat(TokenKind::LParen) {
+            Ok(Expr::Call {
+                callee: path,
+                args: self.arg_list()?,
+            })
+        } else {
+            Ok(Expr::Path(path))
+        }
+    }
+
+    fn arg_list(&mut self) -> Result<Vec<Expr>, ParseError> {
+        if self.eat(TokenKind::RParen) {
+            return Ok(Vec::new());
+        }
+
+        let mut args = Vec::new();
+
+        loop {
+            args.push(self.expr()?);
+
+            if !self.eat(TokenKind::Comma) {
+                break;
+            }
+        }
+
+        self.expect(TokenKind::RParen)?;
+        Ok(args)
     }
 
     fn path(&mut self) -> Result<Vec<String>, ParseError> {
@@ -262,6 +290,31 @@ mod tests {
         assert_eq!(proc.name, "main");
         assert_eq!(proc.return_type.path, vec!["Exit".to_owned()]);
         assert_eq!(proc.body.stmts.len(), 1);
+    }
+
+    #[test]
+    fn parses_call_expression() {
+        let tokens = lex(r#"
+            unit app.calls;
+
+            proc make_exit() -> Exit {
+                return Exit.ok;
+            }
+
+            export proc main() -> Exit {
+                return make_exit();
+            }
+            "#);
+        let file = parse_source_file(&tokens).expect("source file should parse");
+
+        assert_eq!(file.items.len(), 2);
+        let Item::Proc(proc) = &file.items[1];
+        let Stmt::Return(Expr::Call { callee, args }) = &proc.body.stmts[0] else {
+            panic!("main should return a call expression");
+        };
+
+        assert_eq!(callee, &vec!["make_exit".to_owned()]);
+        assert!(args.is_empty());
     }
 
     #[test]

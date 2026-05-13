@@ -1,0 +1,5 @@
+unit fixtures.unknown_proc_call;
+
+export proc main() -> Exit {
+    return nope();
+}

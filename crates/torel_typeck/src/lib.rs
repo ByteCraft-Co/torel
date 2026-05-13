@@ -21,6 +21,32 @@ pub enum TypeckError {
     #[error("unknown value path `{path}`")]
     UnknownValuePath { path: String },
 
+    #[error("unknown procedure `{name}`")]
+    UnknownProc { name: String },
+
+    #[error("`{path}` is not callable")]
+    NotCallable { path: String },
+
+    #[error("procedure `{name}` used as value")]
+    ProcedureUsedAsValue { name: String },
+
+    #[error("argument count mismatch for `{proc}`: expected {expected}, found {found}")]
+    ArgCountMismatch {
+        proc: String,
+        expected: usize,
+        found: usize,
+    },
+
+    #[error(
+        "argument type mismatch for `{proc}` argument {index}: expected `{expected}`, found `{found}`"
+    )]
+    ArgTypeMismatch {
+        proc: String,
+        index: usize,
+        expected: String,
+        found: String,
+    },
+
     #[error("return type mismatch: expected `{expected}`, found `{found}`")]
     ReturnTypeMismatch { expected: String, found: String },
 
@@ -32,7 +58,7 @@ pub enum TypeckError {
 pub struct SymbolTable {
     types: HashMap<String, TypeId>,
     values: HashMap<String, ValueSymbol>,
-    procs: HashMap<String, ProcId>,
+    procs: HashMap<String, ProcSymbol>,
     type_names: Vec<String>,
 }
 
@@ -40,6 +66,13 @@ pub struct SymbolTable {
 struct ValueSymbol {
     id: ValueId,
     ty: TypeId,
+}
+
+#[derive(Debug, Clone)]
+struct ProcSymbol {
+    id: ProcId,
+    params: Vec<TypeId>,
+    return_type: TypeId,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -83,7 +116,12 @@ impl SymbolTable {
         id
     }
 
-    fn insert_proc(&mut self, name: &str) -> Result<ProcId, TypeckError> {
+    fn insert_proc(
+        &mut self,
+        name: &str,
+        params: Vec<TypeId>,
+        return_type: TypeId,
+    ) -> Result<ProcId, TypeckError> {
         if self.procs.contains_key(name) {
             return Err(TypeckError::DuplicateProc {
                 name: name.to_owned(),
@@ -91,7 +129,14 @@ impl SymbolTable {
         }
 
         let id = ProcId(self.procs.len() as u32);
-        self.procs.insert(name.to_owned(), id);
+        self.procs.insert(
+            name.to_owned(),
+            ProcSymbol {
+                id,
+                params,
+                return_type,
+            },
+        );
         Ok(id)
     }
 
@@ -129,7 +174,14 @@ pub fn check_types(hir: &HirModule) -> Result<TypedModule, TypeckError> {
     let mut symbols = SymbolTable::with_builtins();
 
     for proc in &hir.procs {
-        symbols.insert_proc(&proc.name)?;
+        let params = proc
+            .params
+            .iter()
+            .map(|param| symbols.resolve_type(&param.ty).map(|ty| ty.id))
+            .collect::<Result<Vec<_>, _>>()?;
+        let return_type = symbols.resolve_type(&proc.return_type)?.id;
+
+        symbols.insert_proc(&proc.name, params, return_type)?;
     }
 
     let procs = hir
@@ -149,7 +201,7 @@ fn check_proc(symbols: &SymbolTable, proc: &HirProc) -> Result<TypedProc, Typeck
     let id = symbols
         .procs
         .get(&proc.name)
-        .copied()
+        .map(|proc| proc.id)
         .expect("procedure should be predeclared");
     let params = check_params(symbols, &proc.params)?;
     let locals = local_map(&params)?;
@@ -239,6 +291,7 @@ fn check_expr(
 ) -> Result<TypedExpr, TypeckError> {
     match expr {
         HirExpr::Path(path) => check_path_expr(symbols, locals, path),
+        HirExpr::Call { callee, args } => check_call_expr(symbols, locals, callee, args),
     }
 }
 
@@ -258,12 +311,8 @@ fn check_path_expr(
             });
         }
 
-        if let Some(proc) = symbols.procs.get(&joined) {
-            return Ok(TypedExpr::Path {
-                path: path.to_vec(),
-                ty: TypeId(6),
-                resolved: ResolvedValue::Proc(*proc),
-            });
+        if symbols.procs.contains_key(&joined) {
+            return Err(TypeckError::ProcedureUsedAsValue { name: joined });
         }
     }
 
@@ -276,6 +325,55 @@ fn check_path_expr(
     }
 
     Err(TypeckError::UnknownValuePath { path: joined })
+}
+
+fn check_call_expr(
+    symbols: &SymbolTable,
+    locals: &HashMap<String, LocalSymbol>,
+    callee: &[String],
+    args: &[HirExpr],
+) -> Result<TypedExpr, TypeckError> {
+    let name = join_path(callee);
+
+    if symbols.values.contains_key(&name) || locals.contains_key(&name) {
+        return Err(TypeckError::NotCallable { path: name });
+    }
+
+    let Some(proc) = symbols.procs.get(&name) else {
+        return Err(TypeckError::UnknownProc { name });
+    };
+
+    if proc.params.len() != args.len() {
+        return Err(TypeckError::ArgCountMismatch {
+            proc: name,
+            expected: proc.params.len(),
+            found: args.len(),
+        });
+    }
+
+    let mut typed_args = Vec::new();
+
+    for (index, (arg, expected)) in args.iter().zip(&proc.params).enumerate() {
+        let typed = check_expr(symbols, locals, arg)?;
+        let found = expr_type(&typed);
+
+        if found != *expected {
+            return Err(TypeckError::ArgTypeMismatch {
+                proc: name,
+                index: index + 1,
+                expected: symbols.type_name(*expected),
+                found: symbols.type_name(found),
+            });
+        }
+
+        typed_args.push(typed);
+    }
+
+    Ok(TypedExpr::Call {
+        callee: proc.id,
+        args: typed_args,
+        ty: proc.return_type,
+    })
 }
 
 fn check_returns(
@@ -312,6 +410,7 @@ fn check_returns(
 fn expr_type(expr: &TypedExpr) -> TypeId {
     match expr {
         TypedExpr::Path { ty, .. } => *ty,
+        TypedExpr::Call { ty, .. } => *ty,
     }
 }
 

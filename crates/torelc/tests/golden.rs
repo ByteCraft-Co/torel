@@ -84,6 +84,34 @@ fn checks_valid_fixture() {
 }
 
 #[test]
+fn checks_valid_call_no_args_fixture() {
+    let output = run_torelc(&["tests/fixtures/valid/call_no_args.torel", "--emit", "check"]);
+
+    assert!(output.status.success(), "valid call fixture should pass");
+}
+
+#[test]
+fn checks_valid_call_with_arg_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/call_with_arg.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(output.status.success(), "valid call fixture should pass");
+}
+
+#[test]
+fn checks_valid_return_param_fixture() {
+    let output = run_torelc(&["tests/fixtures/valid/return_param.torel", "--emit", "check"]);
+
+    assert!(
+        output.status.success(),
+        "valid return param fixture should pass"
+    );
+}
+
+#[test]
 fn rejects_trailing_junk_fixture() {
     assert_failure(
         "tests/fixtures/invalid/trailing_junk.torel",
@@ -120,5 +148,37 @@ fn rejects_missing_return() {
     assert_failure(
         "tests/fixtures/invalid/missing_return.torel",
         "error: missing return from procedure `main`: expected `Exit`\n",
+    );
+}
+
+#[test]
+fn rejects_unknown_proc_call() {
+    assert_failure(
+        "tests/fixtures/invalid/unknown_proc_call.torel",
+        "error: unknown procedure `nope`\n",
+    );
+}
+
+#[test]
+fn rejects_arg_count_mismatch() {
+    assert_failure(
+        "tests/fixtures/invalid/arg_count_mismatch.torel",
+        "error: argument count mismatch for `id_exit`: expected 1, found 0\n",
+    );
+}
+
+#[test]
+fn rejects_arg_type_mismatch() {
+    assert_failure(
+        "tests/fixtures/invalid/arg_type_mismatch.torel",
+        "error: argument type mismatch for `id_i32` argument 1: expected `Int32`, found `Exit`\n",
+    );
+}
+
+#[test]
+fn rejects_proc_used_as_value() {
+    assert_failure(
+        "tests/fixtures/invalid/proc_used_as_value.torel",
+        "error: procedure `make_exit` used as value\n",
     );
 }

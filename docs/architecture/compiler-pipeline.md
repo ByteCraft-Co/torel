@@ -36,11 +36,12 @@ source
 The pipeline is executable but intentionally skeletal:
 
 - the lexer recognizes the first core tokens needed by examples
-- the parser accepts a `unit` declaration and the first top-level `proc` shape
+- the parser accepts a `unit` declaration, the first top-level `proc` shape, returns, paths, and procedure calls
 - HIR preserves unit identity and procedure structure
 - type checking has built-in symbols for `Exit`, `Void`, `Bool`, `Int32`, `UInt64`, `Text`, `Never`, and `Exit.ok`
 - typed IR records resolved type IDs, value IDs, proc IDs, and local IDs
-- the first semantic checks reject unknown types, unknown value paths, bad return types, and missing returns from non-`Void` procedures
+- procedure symbols carry parameter and return types for call checking
+- the first semantic checks reject unknown types, unknown value paths, unknown procedure calls, bad argument counts, bad argument types, bare procedure values, bad return types, and missing returns from non-`Void` procedures
 - type/effect/failure/ownership stages return reports
 - codegen supports a check-only summary and reserves LLVM IR for the next backend phase
 

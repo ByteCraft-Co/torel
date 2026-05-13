@@ -1,0 +1,9 @@
+unit fixtures.call_no_args;
+
+proc make_exit() -> Exit {
+    return Exit.ok;
+}
+
+export proc main() -> Exit {
+    return make_exit();
+}
