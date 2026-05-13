@@ -55,6 +55,7 @@ pub struct HirTypeRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HirBlock {
     pub stmts: Vec<HirStmt>,
+    pub tail: Option<HirExpr>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,6 +134,7 @@ pub struct TypedTypeRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TypedBlock {
     pub stmts: Vec<TypedStmt>,
+    pub tail: Option<TypedExpr>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -236,6 +238,7 @@ fn lower_type_ref(ty: &TypeRef) -> HirTypeRef {
 fn lower_block(block: &Block) -> HirBlock {
     HirBlock {
         stmts: block.stmts.iter().map(lower_stmt).collect(),
+        tail: block.tail.as_ref().map(lower_expr),
     }
 }
 

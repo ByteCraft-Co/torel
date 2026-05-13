@@ -53,6 +53,7 @@ pub struct TypeRef {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
+    pub tail: Option<Expr>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

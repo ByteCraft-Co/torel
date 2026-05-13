@@ -125,16 +125,28 @@ impl Parser<'_, '_> {
     fn block(&mut self) -> Result<Block, ParseError> {
         self.expect(TokenKind::LBrace)?;
         let mut stmts = Vec::new();
+        let mut tail = None;
 
         while !self.eat(TokenKind::RBrace) {
             if self.at_eof() {
-                return Err(self.error_current("expected statement or `}`"));
+                return Err(self.error_current("expected statement, final expression, or `}`"));
             }
 
-            stmts.push(self.stmt()?);
+            if self.at_stmt_start() {
+                stmts.push(self.stmt()?);
+                continue;
+            }
+
+            if self.at_expr_start() {
+                tail = Some(self.expr()?);
+                self.expect(TokenKind::RBrace)?;
+                break;
+            }
+
+            return Err(self.error_current("expected statement, final expression, or `}`"));
         }
 
-        Ok(Block { stmts })
+        Ok(Block { stmts, tail })
     }
 
     fn stmt(&mut self) -> Result<Stmt, ParseError> {
@@ -252,6 +264,60 @@ impl Parser<'_, '_> {
         Ok(path)
     }
 
+    fn at_stmt_start(&self) -> bool {
+        self.at_keyword(Keyword::Fix)
+            || self.at_keyword(Keyword::Slot)
+            || self.at_keyword(Keyword::If)
+            || self.at_keyword(Keyword::Return)
+            || self.path_is_followed_by_equal()
+    }
+
+    fn at_expr_start(&self) -> bool {
+        matches!(
+            self.peek(),
+            Some(
+                TokenKind::Ident(_)
+                    | TokenKind::Int(_)
+                    | TokenKind::Text(_)
+                    | TokenKind::Keyword(Keyword::True | Keyword::False)
+            )
+        )
+    }
+
+    fn path_is_followed_by_equal(&self) -> bool {
+        let mut cursor = self.cursor;
+
+        if !matches!(
+            self.tokens.get(cursor).map(|token| &token.kind),
+            Some(TokenKind::Ident(_))
+        ) {
+            return false;
+        }
+
+        cursor += 1;
+
+        while matches!(
+            self.tokens.get(cursor).map(|token| &token.kind),
+            Some(TokenKind::Dot)
+        ) {
+            cursor += 1;
+
+            if !matches!(
+                self.tokens.get(cursor).map(|token| &token.kind),
+                Some(TokenKind::Ident(_))
+            ) {
+                return false;
+            }
+
+            cursor += 1;
+        }
+
+        matches!(
+            self.tokens.get(cursor).map(|token| &token.kind),
+            Some(TokenKind::Equal)
+        )
+    }
+
     fn at_keyword(&self, keyword: Keyword) -> bool {
         matches!(self.peek(), Some(TokenKind::Keyword(actual)) if *actual == keyword)
     }
@@ -354,6 +420,7 @@ mod tests {
         assert_eq!(proc.name, "main");
         assert_eq!(proc.return_type.path, vec!["Exit".to_owned()]);
         assert_eq!(proc.body.stmts.len(), 1);
+        assert_eq!(proc.body.tail, None);
     }
 
     #[test]
@@ -465,6 +532,24 @@ mod tests {
         assert_eq!(condition, &Expr::Bool(true));
         assert_eq!(then_block.stmts.len(), 1);
         assert_eq!(else_block.as_ref().expect("else block").stmts.len(), 1);
+    }
+
+    #[test]
+    fn parses_final_expression() {
+        let tokens = lex(r#"
+            unit app.tail;
+
+            export proc main() -> Int32 {
+                fix answer: Int32 = 42;
+                answer
+            }
+            "#);
+        let file = parse_source_file(&tokens).expect("source file should parse");
+
+        let Item::Proc(proc) = &file.items[0];
+
+        assert_eq!(proc.body.stmts.len(), 1);
+        assert_eq!(proc.body.tail, Some(Expr::Path(vec!["answer".to_owned()])));
     }
 
     #[test]

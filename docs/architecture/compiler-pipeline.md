@@ -36,7 +36,7 @@ source
 The pipeline is executable but intentionally skeletal:
 
 - the lexer recognizes the first core tokens needed by examples
-- the parser accepts a `unit` declaration, the first top-level `proc` shape, `fix`/`slot` bindings, assignment statements, `if`/`else` statements, returns, paths, literals, and procedure calls
+- the parser accepts a `unit` declaration, the first top-level `proc` shape, `fix`/`slot` bindings, assignment statements, `if`/`else` statements, returns, final block expressions, paths, literals, and procedure calls
 - HIR preserves unit identity and procedure structure
 - type checking has built-in symbols for `Exit`, `Void`, `Bool`, `Int32`, `UInt64`, `Text`, `Never`, and `Exit.ok`
 - typed IR records resolved type IDs, value IDs, proc IDs, and local IDs
@@ -45,7 +45,8 @@ The pipeline is executable but intentionally skeletal:
 - `fix` and `slot` bindings resolve declared types, check initializer types, and add locals for later statements
 - assignments resolve mutable local targets and check assigned expression types
 - `if`/`else` statements require `Bool` conditions, type-check branch blocks, keep branch-local bindings scoped to their branch, and participate in guaranteed-return analysis
-- the first semantic checks reject unknown types, unknown locals, duplicate locals, assignment to immutable locals, invalid assignment targets, bad assignment values, non-`Bool` conditions, unknown value paths, unknown procedure calls, non-callable values, bad argument counts, bad argument types, bare procedure values, bad local initializers, bad return types, and missing guaranteed returns from non-`Void` procedures
+- block tail expressions type-check as procedure results and let a block complete with a value without an explicit `return`
+- the first semantic checks reject unknown types, unknown locals, duplicate locals, assignment to immutable locals, invalid assignment targets, bad assignment values, non-`Bool` conditions, unknown value paths, unknown procedure calls, non-callable values, bad argument counts, bad argument types, bare procedure values, bad local initializers, bad explicit and final-expression return types, and missing guaranteed returns from non-`Void` procedures
 - type/effect/failure/ownership stages return reports
 - codegen supports a check-only summary and reserves LLVM IR for the next backend phase
 

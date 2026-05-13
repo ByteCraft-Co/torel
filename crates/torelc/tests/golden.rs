@@ -244,6 +244,67 @@ fn checks_valid_if_assign_slot_fixture() {
 }
 
 #[test]
+fn checks_valid_final_expr_int_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/final_expr_int.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(output.status.success(), "valid final int expr should pass");
+}
+
+#[test]
+fn checks_valid_final_expr_local_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/final_expr_local.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "valid final local expr should pass"
+    );
+}
+
+#[test]
+fn checks_valid_final_expr_call_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/final_expr_call.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(output.status.success(), "valid final call expr should pass");
+}
+
+#[test]
+fn checks_valid_final_expr_if_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/final_expr_if.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(output.status.success(), "valid final if expr should pass");
+}
+
+#[test]
+fn checks_valid_final_expr_if_with_returns_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/final_expr_if_with_returns.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(
+        output.status.success(),
+        "valid final if expr with branch return should pass"
+    );
+}
+
+#[test]
 fn rejects_trailing_junk_fixture() {
     assert_failure(
         "tests/fixtures/invalid/trailing_junk.torel",
@@ -416,5 +477,37 @@ fn rejects_branch_local_does_not_escape() {
     assert_failure(
         "tests/fixtures/invalid/branch_local_does_not_escape.torel",
         "error: unknown local `answer`\n",
+    );
+}
+
+#[test]
+fn rejects_final_expr_type_mismatch() {
+    assert_failure(
+        "tests/fixtures/invalid/final_expr_type_mismatch.torel",
+        "error: return type mismatch: expected `Exit`, found `Int32`\n",
+    );
+}
+
+#[test]
+fn rejects_final_expr_missing_else() {
+    assert_failure(
+        "tests/fixtures/invalid/final_expr_missing_else.torel",
+        "error: missing return from procedure `main`: expected `Int32`\n",
+    );
+}
+
+#[test]
+fn rejects_final_expr_branch_mismatch() {
+    assert_failure(
+        "tests/fixtures/invalid/final_expr_branch_mismatch.torel",
+        "error: return type mismatch: expected `Int32`, found `Text`\n",
+    );
+}
+
+#[test]
+fn rejects_statement_after_final_expr() {
+    assert_failure(
+        "tests/fixtures/invalid/statement_after_final_expr.torel",
+        "error: expected token `RBrace` at 84..90\n",
     );
 }

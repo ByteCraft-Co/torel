@@ -324,7 +324,13 @@ fn check_block(
         )?);
     }
 
-    Ok(TypedBlock { stmts })
+    let tail = block
+        .tail
+        .as_ref()
+        .map(|expr| check_tail_expr(symbols, locals, expected_return, expr))
+        .transpose()?;
+
+    Ok(TypedBlock { stmts, tail })
 }
 
 fn check_stmt(
@@ -499,7 +505,28 @@ fn check_return_stmt(
     expr: &HirExpr,
 ) -> Result<TypedStmt, TypeckError> {
     let expr = check_expr(symbols, locals, expr)?;
-    let found = expr_type(&expr);
+    check_return_type(symbols, expected, &expr)?;
+
+    Ok(TypedStmt::Return(expr))
+}
+
+fn check_tail_expr(
+    symbols: &SymbolTable,
+    locals: &HashMap<String, LocalSymbol>,
+    expected: &TypedTypeRef,
+    expr: &HirExpr,
+) -> Result<TypedExpr, TypeckError> {
+    let expr = check_expr(symbols, locals, expr)?;
+    check_return_type(symbols, expected, &expr)?;
+    Ok(expr)
+}
+
+fn check_return_type(
+    symbols: &SymbolTable,
+    expected: &TypedTypeRef,
+    expr: &TypedExpr,
+) -> Result<(), TypeckError> {
+    let found = expr_type(expr);
 
     if found != expected.id {
         return Err(TypeckError::ReturnTypeMismatch {
@@ -508,7 +535,7 @@ fn check_return_stmt(
         });
     }
 
-    Ok(TypedStmt::Return(expr))
+    Ok(())
 }
 
 fn local_mutability(kind: HirBindingKind) -> Mutability {
@@ -629,7 +656,7 @@ fn check_return_flow(
     expected: &TypedTypeRef,
     body: &TypedBlock,
 ) -> Result<(), TypeckError> {
-    if expected.display_name != "Void" && block_flow(body) != Flow::AlwaysReturns {
+    if expected.display_name != "Void" && !block_flow(body).satisfies_return(expected.id) {
         return Err(TypeckError::MissingReturn {
             proc: proc.name.clone(),
             expected: expected.display_name.clone(),
@@ -643,13 +670,31 @@ fn check_return_flow(
 enum Flow {
     MayContinue,
     AlwaysReturns,
+    CompletesWithValue(TypeId),
+}
+
+impl Flow {
+    fn satisfies_return(self, expected: TypeId) -> bool {
+        match self {
+            Self::MayContinue => false,
+            Self::AlwaysReturns => true,
+            Self::CompletesWithValue(found) => found == expected,
+        }
+    }
 }
 
 fn block_flow(block: &TypedBlock) -> Flow {
-    for stmt in &block.stmts {
-        if stmt_flow(stmt) == Flow::AlwaysReturns {
-            return Flow::AlwaysReturns;
+    for (index, stmt) in block.stmts.iter().enumerate() {
+        match stmt_flow(stmt) {
+            Flow::MayContinue => {}
+            Flow::AlwaysReturns => return Flow::AlwaysReturns,
+            flow @ Flow::CompletesWithValue(_) if index + 1 == block.stmts.len() => return flow,
+            Flow::CompletesWithValue(_) => {}
         }
+    }
+
+    if let Some(tail) = &block.tail {
+        return Flow::CompletesWithValue(expr_type(tail));
     }
 
     Flow::MayContinue
@@ -662,14 +707,24 @@ fn stmt_flow(stmt: &TypedStmt) -> Flow {
             then_block,
             else_block: Some(else_block),
             ..
-        } if block_flow(then_block) == Flow::AlwaysReturns
-            && block_flow(else_block) == Flow::AlwaysReturns =>
-        {
-            Flow::AlwaysReturns
-        }
+        } => combine_branch_flow(block_flow(then_block), block_flow(else_block)),
         TypedStmt::Local { .. } | TypedStmt::Assign { .. } | TypedStmt::If { .. } => {
             Flow::MayContinue
         }
+    }
+}
+
+fn combine_branch_flow(then_flow: Flow, else_flow: Flow) -> Flow {
+    match (then_flow, else_flow) {
+        (Flow::AlwaysReturns, Flow::AlwaysReturns) => Flow::AlwaysReturns,
+        (Flow::CompletesWithValue(then_ty), Flow::CompletesWithValue(else_ty))
+            if then_ty == else_ty =>
+        {
+            Flow::CompletesWithValue(then_ty)
+        }
+        (Flow::AlwaysReturns, Flow::CompletesWithValue(ty))
+        | (Flow::CompletesWithValue(ty), Flow::AlwaysReturns) => Flow::CompletesWithValue(ty),
+        _ => Flow::MayContinue,
     }
 }
 
@@ -708,6 +763,7 @@ mod tests {
                         "Exit".to_owned(),
                         "ok".to_owned(),
                     ]))],
+                    tail: None,
                 },
             }],
         };

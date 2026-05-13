@@ -1,0 +1,5 @@
+unit fixtures.final_expr_type_mismatch;
+
+export proc main() -> Exit {
+    42
+}

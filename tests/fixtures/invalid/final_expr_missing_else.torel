@@ -1,0 +1,7 @@
+unit fixtures.final_expr_missing_else;
+
+export proc main() -> Int32 {
+    if true {
+        1
+    }
+}

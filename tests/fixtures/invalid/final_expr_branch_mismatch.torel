@@ -1,0 +1,9 @@
+unit fixtures.final_expr_branch_mismatch;
+
+export proc main() -> Int32 {
+    if true {
+        1
+    } else {
+        "two"
+    }
+}

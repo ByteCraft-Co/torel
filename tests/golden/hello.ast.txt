@@ -29,6 +29,7 @@ SourceFile {
                             ),
                         ),
                     ],
+                    tail: None,
                 },
             },
         ),

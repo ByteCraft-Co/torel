@@ -1,0 +1,6 @@
+unit fixtures.statement_after_final_expr;
+
+export proc main() -> Int32 {
+    42
+    return 42;
+}
