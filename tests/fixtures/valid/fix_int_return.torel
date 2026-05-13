@@ -1,0 +1,6 @@
+unit fixtures.fix_int_return;
+
+export proc main() -> Int32 {
+    fix answer: Int32 = 42;
+    return answer;
+}

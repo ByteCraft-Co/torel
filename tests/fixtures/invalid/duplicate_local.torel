@@ -1,0 +1,7 @@
+unit fixtures.duplicate_local;
+
+export proc main() -> Int32 {
+    fix answer: Int32 = 41;
+    fix answer: Int32 = 42;
+    return answer;
+}

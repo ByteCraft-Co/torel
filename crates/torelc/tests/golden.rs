@@ -112,6 +112,57 @@ fn checks_valid_return_param_fixture() {
 }
 
 #[test]
+fn checks_valid_return_int_literal_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/return_int_literal.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(output.status.success(), "valid int literal should pass");
+}
+
+#[test]
+fn checks_valid_return_text_literal_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/return_text_literal.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(output.status.success(), "valid text literal should pass");
+}
+
+#[test]
+fn checks_valid_return_bool_literal_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/return_bool_literal.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(output.status.success(), "valid bool literal should pass");
+}
+
+#[test]
+fn checks_valid_fix_int_return_fixture() {
+    let output = run_torelc(&[
+        "tests/fixtures/valid/fix_int_return.torel",
+        "--emit",
+        "check",
+    ]);
+
+    assert!(output.status.success(), "valid fix return should pass");
+}
+
+#[test]
+fn checks_valid_fix_call_arg_fixture() {
+    let output = run_torelc(&["tests/fixtures/valid/fix_call_arg.torel", "--emit", "check"]);
+
+    assert!(output.status.success(), "valid fix call arg should pass");
+}
+
+#[test]
 fn rejects_trailing_junk_fixture() {
     assert_failure(
         "tests/fixtures/invalid/trailing_junk.torel",
@@ -180,5 +231,45 @@ fn rejects_proc_used_as_value() {
     assert_failure(
         "tests/fixtures/invalid/proc_used_as_value.torel",
         "error: procedure `make_exit` used as value\n",
+    );
+}
+
+#[test]
+fn rejects_not_callable() {
+    assert_failure(
+        "tests/fixtures/invalid/not_callable.torel",
+        "error: `Exit.ok` is not callable\n",
+    );
+}
+
+#[test]
+fn rejects_unknown_local() {
+    assert_failure(
+        "tests/fixtures/invalid/unknown_local.torel",
+        "error: unknown local `answer`\n",
+    );
+}
+
+#[test]
+fn rejects_duplicate_local() {
+    assert_failure(
+        "tests/fixtures/invalid/duplicate_local.torel",
+        "error: duplicate local `answer`\n",
+    );
+}
+
+#[test]
+fn rejects_fix_type_mismatch() {
+    assert_failure(
+        "tests/fixtures/invalid/fix_type_mismatch.torel",
+        "error: local `answer` type mismatch: expected `Int32`, found `Exit`\n",
+    );
+}
+
+#[test]
+fn rejects_return_literal_mismatch() {
+    assert_failure(
+        "tests/fixtures/invalid/return_literal_mismatch.torel",
+        "error: return type mismatch: expected `Exit`, found `Int32`\n",
     );
 }

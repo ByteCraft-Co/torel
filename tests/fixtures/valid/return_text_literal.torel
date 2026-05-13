@@ -1,0 +1,5 @@
+unit fixtures.return_text_literal;
+
+export proc main() -> Text {
+    return "hello";
+}

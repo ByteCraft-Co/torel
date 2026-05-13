@@ -1,0 +1,5 @@
+unit fixtures.return_literal_mismatch;
+
+export proc main() -> Exit {
+    return 42;
+}

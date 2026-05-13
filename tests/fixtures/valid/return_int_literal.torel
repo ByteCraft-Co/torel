@@ -1,0 +1,5 @@
+unit fixtures.return_int_literal;
+
+export proc main() -> Int32 {
+    return 42;
+}

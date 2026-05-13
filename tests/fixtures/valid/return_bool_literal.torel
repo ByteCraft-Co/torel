@@ -1,0 +1,5 @@
+unit fixtures.return_bool_literal;
+
+export proc main() -> Bool {
+    return true;
+}

@@ -21,6 +21,19 @@ pub enum TypeckError {
     #[error("unknown value path `{path}`")]
     UnknownValuePath { path: String },
 
+    #[error("unknown local `{name}`")]
+    UnknownLocal { name: String },
+
+    #[error("duplicate local `{name}`")]
+    DuplicateLocal { name: String },
+
+    #[error("local `{name}` type mismatch: expected `{expected}`, found `{found}`")]
+    LocalTypeMismatch {
+        name: String,
+        expected: String,
+        found: String,
+    },
+
     #[error("unknown procedure `{name}`")]
     UnknownProc { name: String },
 
@@ -161,6 +174,13 @@ impl SymbolTable {
             .unwrap_or_else(|| format!("<type {}>", id.0))
     }
 
+    fn builtin_type(&self, name: &str) -> TypeId {
+        self.types
+            .get(name)
+            .copied()
+            .unwrap_or_else(|| panic!("builtin type `{name}` should exist"))
+    }
+
     fn symbol_counts(&self) -> SymbolCounts {
         SymbolCounts {
             types: self.types.len(),
@@ -206,7 +226,7 @@ fn check_proc(symbols: &SymbolTable, proc: &HirProc) -> Result<TypedProc, Typeck
     let params = check_params(symbols, &proc.params)?;
     let locals = local_map(&params)?;
     let return_type = symbols.resolve_type(&proc.return_type)?;
-    let body = check_block(symbols, &locals, &proc.body)?;
+    let body = check_block(symbols, locals, &proc.body)?;
 
     check_returns(symbols, proc, &return_type, &body)?;
 
@@ -262,26 +282,63 @@ fn local_map(params: &[TypedParam]) -> Result<HashMap<String, LocalSymbol>, Type
 
 fn check_block(
     symbols: &SymbolTable,
-    locals: &HashMap<String, LocalSymbol>,
+    mut locals: HashMap<String, LocalSymbol>,
     block: &HirBlock,
 ) -> Result<TypedBlock, TypeckError> {
-    Ok(TypedBlock {
-        stmts: block
-            .stmts
-            .iter()
-            .map(|stmt| check_stmt(symbols, locals, stmt))
-            .collect::<Result<Vec<_>, _>>()?,
-    })
+    let mut stmts = Vec::new();
+
+    for stmt in &block.stmts {
+        stmts.push(check_stmt(symbols, &mut locals, stmt)?);
+    }
+
+    Ok(TypedBlock { stmts })
 }
 
 fn check_stmt(
     symbols: &SymbolTable,
-    locals: &HashMap<String, LocalSymbol>,
+    locals: &mut HashMap<String, LocalSymbol>,
     stmt: &HirStmt,
 ) -> Result<TypedStmt, TypeckError> {
     match stmt {
+        HirStmt::Fix { name, ty, value } => check_fix_stmt(symbols, locals, name, ty, value),
         HirStmt::Return(expr) => Ok(TypedStmt::Return(check_expr(symbols, locals, expr)?)),
     }
+}
+
+fn check_fix_stmt(
+    symbols: &SymbolTable,
+    locals: &mut HashMap<String, LocalSymbol>,
+    name: &str,
+    ty: &HirTypeRef,
+    value: &HirExpr,
+) -> Result<TypedStmt, TypeckError> {
+    if locals.contains_key(name) {
+        return Err(TypeckError::DuplicateLocal {
+            name: name.to_owned(),
+        });
+    }
+
+    let ty = symbols.resolve_type(ty)?;
+    let value = check_expr(symbols, locals, value)?;
+    let found = expr_type(&value);
+
+    if found != ty.id {
+        return Err(TypeckError::LocalTypeMismatch {
+            name: name.to_owned(),
+            expected: ty.display_name.clone(),
+            found: symbols.type_name(found),
+        });
+    }
+
+    let id = LocalId(locals.len() as u32);
+    locals.insert(name.to_owned(), LocalSymbol { id, ty: ty.id });
+
+    Ok(TypedStmt::Fix {
+        id,
+        name: name.to_owned(),
+        ty,
+        value,
+    })
 }
 
 fn check_expr(
@@ -291,6 +348,18 @@ fn check_expr(
 ) -> Result<TypedExpr, TypeckError> {
     match expr {
         HirExpr::Path(path) => check_path_expr(symbols, locals, path),
+        HirExpr::Int(value) => Ok(TypedExpr::Int {
+            value: value.clone(),
+            ty: symbols.builtin_type("Int32"),
+        }),
+        HirExpr::Text(value) => Ok(TypedExpr::Text {
+            value: value.clone(),
+            ty: symbols.builtin_type("Text"),
+        }),
+        HirExpr::Bool(value) => Ok(TypedExpr::Bool {
+            value: *value,
+            ty: symbols.builtin_type("Bool"),
+        }),
         HirExpr::Call { callee, args } => check_call_expr(symbols, locals, callee, args),
     }
 }
@@ -314,6 +383,8 @@ fn check_path_expr(
         if symbols.procs.contains_key(&joined) {
             return Err(TypeckError::ProcedureUsedAsValue { name: joined });
         }
+
+        return Err(TypeckError::UnknownLocal { name: joined });
     }
 
     if let Some(value) = symbols.values.get(&joined) {
@@ -385,10 +456,12 @@ fn check_returns(
     let mut has_return = false;
 
     for stmt in &body.stmts {
-        let TypedStmt::Return(expr) = stmt;
+        let TypedStmt::Return(expr) = stmt else {
+            continue;
+        };
+
         has_return = true;
         let found = expr_type(expr);
-
         if found != expected.id {
             return Err(TypeckError::ReturnTypeMismatch {
                 expected: expected.display_name.clone(),
@@ -410,6 +483,9 @@ fn check_returns(
 fn expr_type(expr: &TypedExpr) -> TypeId {
     match expr {
         TypedExpr::Path { ty, .. } => *ty,
+        TypedExpr::Int { ty, .. } => *ty,
+        TypedExpr::Text { ty, .. } => *ty,
+        TypedExpr::Bool { ty, .. } => *ty,
         TypedExpr::Call { ty, .. } => *ty,
     }
 }

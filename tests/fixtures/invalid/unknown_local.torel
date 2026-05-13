@@ -1,0 +1,5 @@
+unit fixtures.unknown_local;
+
+export proc main() -> Int32 {
+    return answer;
+}

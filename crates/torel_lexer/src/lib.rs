@@ -20,6 +20,7 @@ pub enum TokenKind<'src> {
     Semicolon,
     Comma,
     Colon,
+    Equal,
     LBrace,
     RBrace,
     LParen,
@@ -46,6 +47,8 @@ pub enum Keyword {
     Does,
     Fails,
     Return,
+    True,
+    False,
 }
 
 pub fn lex(source: &str) -> Vec<Token<'_>> {
@@ -85,6 +88,7 @@ impl<'src> Lexer<'src> {
             ';' => self.single(TokenKind::Semicolon),
             ',' => self.single(TokenKind::Comma),
             ':' => self.single(TokenKind::Colon),
+            '=' => self.single(TokenKind::Equal),
             '{' => self.single(TokenKind::LBrace),
             '}' => self.single(TokenKind::RBrace),
             '(' => self.single(TokenKind::LParen),
@@ -167,6 +171,8 @@ impl<'src> Lexer<'src> {
             "does" => TokenKind::Keyword(Keyword::Does),
             "fails" => TokenKind::Keyword(Keyword::Fails),
             "return" => TokenKind::Keyword(Keyword::Return),
+            "true" => TokenKind::Keyword(Keyword::True),
+            "false" => TokenKind::Keyword(Keyword::False),
             _ => TokenKind::Ident(text),
         }
     }

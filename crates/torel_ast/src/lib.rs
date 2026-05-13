@@ -57,12 +57,20 @@ pub struct Block {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
+    Fix {
+        name: String,
+        ty: TypeRef,
+        value: Expr,
+    },
     Return(Expr),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     Path(Vec<String>),
+    Int(String),
+    Text(String),
+    Bool(bool),
     Call {
         callee: Vec<String>,
         args: Vec<Expr>,

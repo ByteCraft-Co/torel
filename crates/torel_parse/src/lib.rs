@@ -137,7 +137,15 @@ impl Parser<'_, '_> {
     }
 
     fn stmt(&mut self) -> Result<Stmt, ParseError> {
-        if self.eat_keyword(Keyword::Return) {
+        if self.eat_keyword(Keyword::Fix) {
+            let name = self.expect_ident()?;
+            self.expect(TokenKind::Colon)?;
+            let ty = self.type_ref()?;
+            self.expect(TokenKind::Equal)?;
+            let value = self.expr()?;
+            self.expect(TokenKind::Semicolon)?;
+            Ok(Stmt::Fix { name, ty, value })
+        } else if self.eat_keyword(Keyword::Return) {
             let expr = self.expr()?;
             self.expect(TokenKind::Semicolon)?;
             Ok(Stmt::Return(expr))
@@ -147,8 +155,29 @@ impl Parser<'_, '_> {
     }
 
     fn expr(&mut self) -> Result<Expr, ParseError> {
-        let path = self.path()?;
+        match self.peek() {
+            Some(TokenKind::Int(value)) => {
+                let value = (*value).to_owned();
+                self.cursor += 1;
+                return Ok(Expr::Int(value));
+            }
+            Some(TokenKind::Text(value)) => {
+                let value = (*value).to_owned();
+                self.cursor += 1;
+                return Ok(Expr::Text(value));
+            }
+            Some(TokenKind::Keyword(Keyword::True)) => {
+                self.cursor += 1;
+                return Ok(Expr::Bool(true));
+            }
+            Some(TokenKind::Keyword(Keyword::False)) => {
+                self.cursor += 1;
+                return Ok(Expr::Bool(false));
+            }
+            _ => {}
+        }
 
+        let path = self.path()?;
         if self.eat(TokenKind::LParen) {
             Ok(Expr::Call {
                 callee: path,
@@ -315,6 +344,28 @@ mod tests {
 
         assert_eq!(callee, &vec!["make_exit".to_owned()]);
         assert!(args.is_empty());
+    }
+
+    #[test]
+    fn parses_fix_statement_and_literals() {
+        let tokens = lex(r#"
+            unit app.locals;
+
+            export proc main() -> Int32 {
+                fix answer: Int32 = 42;
+                return answer;
+            }
+            "#);
+        let file = parse_source_file(&tokens).expect("source file should parse");
+
+        let Item::Proc(proc) = &file.items[0];
+        let Stmt::Fix { name, ty, value } = &proc.body.stmts[0] else {
+            panic!("first statement should be fix");
+        };
+
+        assert_eq!(name, "answer");
+        assert_eq!(ty.path, vec!["Int32".to_owned()]);
+        assert_eq!(value, &Expr::Int("42".to_owned()));
     }
 
     #[test]

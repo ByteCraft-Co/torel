@@ -1,0 +1,5 @@
+unit fixtures.not_callable;
+
+export proc main() -> Exit {
+    return Exit.ok();
+}

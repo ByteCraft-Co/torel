@@ -59,12 +59,20 @@ pub struct HirBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HirStmt {
+    Fix {
+        name: String,
+        ty: HirTypeRef,
+        value: HirExpr,
+    },
     Return(HirExpr),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HirExpr {
     Path(Vec<String>),
+    Int(String),
+    Text(String),
+    Bool(bool),
     Call {
         callee: Vec<String>,
         args: Vec<HirExpr>,
@@ -107,6 +115,12 @@ pub struct TypedBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypedStmt {
+    Fix {
+        id: LocalId,
+        name: String,
+        ty: TypedTypeRef,
+        value: TypedExpr,
+    },
     Return(TypedExpr),
 }
 
@@ -116,6 +130,18 @@ pub enum TypedExpr {
         path: Vec<String>,
         ty: TypeId,
         resolved: ResolvedValue,
+    },
+    Int {
+        value: String,
+        ty: TypeId,
+    },
+    Text {
+        value: String,
+        ty: TypeId,
+    },
+    Bool {
+        value: bool,
+        ty: TypeId,
     },
     Call {
         callee: ProcId,
@@ -183,6 +209,11 @@ fn lower_block(block: &Block) -> HirBlock {
 
 fn lower_stmt(stmt: &Stmt) -> HirStmt {
     match stmt {
+        Stmt::Fix { name, ty, value } => HirStmt::Fix {
+            name: name.clone(),
+            ty: lower_type_ref(ty),
+            value: lower_expr(value),
+        },
         Stmt::Return(expr) => HirStmt::Return(lower_expr(expr)),
     }
 }
@@ -190,6 +221,9 @@ fn lower_stmt(stmt: &Stmt) -> HirStmt {
 fn lower_expr(expr: &Expr) -> HirExpr {
     match expr {
         Expr::Path(path) => HirExpr::Path(path.clone()),
+        Expr::Int(value) => HirExpr::Int(value.clone()),
+        Expr::Text(value) => HirExpr::Text(value.clone()),
+        Expr::Bool(value) => HirExpr::Bool(*value),
         Expr::Call { callee, args } => HirExpr::Call {
             callee: callee.clone(),
             args: args.iter().map(lower_expr).collect(),
