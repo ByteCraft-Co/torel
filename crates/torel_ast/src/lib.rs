@@ -154,6 +154,15 @@ pub enum StmtKind {
         then_block: Block,
         else_block: Option<Block>,
     },
+    While {
+        condition: Expr,
+        body: Block,
+    },
+    Loop {
+        body: Block,
+    },
+    Break,
+    Continue,
     Return(Expr),
 }
 

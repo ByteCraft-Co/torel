@@ -368,6 +368,19 @@ fn checks_valid_operator_fixtures() {
 }
 
 #[test]
+fn checks_valid_loop_fixtures() {
+    for path in [
+        "tests/fixtures/valid/while_assign_counter.torel",
+        "tests/fixtures/valid/while_continue.torel",
+        "tests/fixtures/valid/loop_break_then_tail.torel",
+        "tests/fixtures/valid/loop_return.torel",
+        "tests/fixtures/valid/loop_continue_diverges.torel",
+    ] {
+        assert_success(path);
+    }
+}
+
+#[test]
 fn rejects_trailing_junk_fixture() {
     assert_failure(
         "tests/fixtures/invalid/trailing_junk.torel",
@@ -577,6 +590,50 @@ fn rejects_invalid_operator_fixtures() {
         (
             "tests/fixtures/invalid/operator_precedence_type_error.torel",
             "error: operator `*` cannot be applied to `Bool` and `Int32`\n",
+        ),
+    ] {
+        assert_failure(path, expected);
+    }
+}
+
+#[test]
+fn rejects_invalid_loop_fixtures() {
+    for (path, expected) in [
+        (
+            "tests/fixtures/invalid/while_condition_not_bool.torel",
+            "error: while condition type mismatch: expected `Bool`, found `Int32`\n",
+        ),
+        (
+            "tests/fixtures/invalid/break_outside_loop.torel",
+            "error: `break` used outside of a loop\n",
+        ),
+        (
+            "tests/fixtures/invalid/continue_outside_loop.torel",
+            "error: `continue` used outside of a loop\n",
+        ),
+        (
+            "tests/fixtures/invalid/loop_local_does_not_escape.torel",
+            "error: unknown local `answer`\n",
+        ),
+        (
+            "tests/fixtures/invalid/unreachable_after_return.torel",
+            "error: unreachable statement\n",
+        ),
+        (
+            "tests/fixtures/invalid/unreachable_after_break.torel",
+            "error: unreachable statement\n",
+        ),
+        (
+            "tests/fixtures/invalid/unreachable_after_continue.torel",
+            "error: unreachable statement\n",
+        ),
+        (
+            "tests/fixtures/invalid/unreachable_after_diverging_loop.torel",
+            "error: unreachable statement\n",
+        ),
+        (
+            "tests/fixtures/invalid/while_missing_return.torel",
+            "error: missing return from procedure `main`: expected `Int32`\n",
         ),
     ] {
         assert_failure(path, expected);

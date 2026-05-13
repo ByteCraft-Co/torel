@@ -1,0 +1,9 @@
+unit fixtures.unreachable_after_diverging_loop;
+
+export proc main() -> Int32 {
+    loop {
+        continue;
+    }
+
+    42
+}

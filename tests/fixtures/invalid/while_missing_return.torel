@@ -1,0 +1,7 @@
+unit fixtures.while_missing_return;
+
+export proc main() -> Int32 {
+    while true {
+        return 42;
+    }
+}

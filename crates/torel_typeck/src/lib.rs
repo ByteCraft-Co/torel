@@ -55,6 +55,18 @@ pub enum TypeckError {
     #[error("if condition type mismatch: expected `Bool`, found `{found}`")]
     IfConditionTypeMismatch { found: String, span: Span },
 
+    #[error("while condition type mismatch: expected `Bool`, found `{found}`")]
+    WhileConditionTypeMismatch { found: String, span: Span },
+
+    #[error("`break` used outside of a loop")]
+    BreakOutsideLoop { span: Span },
+
+    #[error("`continue` used outside of a loop")]
+    ContinueOutsideLoop { span: Span },
+
+    #[error("unreachable statement")]
+    UnreachableStatement { span: Span },
+
     #[error("operator `{op}` cannot be applied to `{found}`")]
     UnaryOperatorTypeMismatch {
         op: &'static str,
@@ -128,6 +140,10 @@ impl TypeckError {
             Self::AssignTypeMismatch { .. } => "assigned value has this type",
             Self::InvalidAssignmentTarget { .. } => "invalid assignment target",
             Self::IfConditionTypeMismatch { .. } => "condition has this type",
+            Self::WhileConditionTypeMismatch { .. } => "condition has this type",
+            Self::BreakOutsideLoop { .. } => "break has no enclosing loop",
+            Self::ContinueOutsideLoop { .. } => "continue has no enclosing loop",
+            Self::UnreachableStatement { .. } => "this statement cannot be reached",
             Self::UnaryOperatorTypeMismatch { .. } | Self::BinaryOperatorTypeMismatch { .. } => {
                 "operator cannot be applied here"
             }
@@ -156,6 +172,10 @@ impl TypeckError {
             | Self::AssignTypeMismatch { span, .. }
             | Self::InvalidAssignmentTarget { span, .. }
             | Self::IfConditionTypeMismatch { span, .. }
+            | Self::WhileConditionTypeMismatch { span, .. }
+            | Self::BreakOutsideLoop { span }
+            | Self::ContinueOutsideLoop { span }
+            | Self::UnreachableStatement { span }
             | Self::UnaryOperatorTypeMismatch { span, .. }
             | Self::BinaryOperatorTypeMismatch { span, .. }
             | Self::UnknownProc { span, .. }
@@ -210,6 +230,12 @@ struct IfStmt<'hir> {
     condition: &'hir HirExpr,
     then_block: &'hir HirBlock,
     else_block: Option<&'hir HirBlock>,
+    stmt_span: Span,
+}
+
+struct WhileStmt<'hir> {
+    condition: &'hir HirExpr,
+    body: &'hir HirBlock,
     stmt_span: Span,
 }
 
@@ -357,6 +383,7 @@ fn check_proc(symbols: &SymbolTable, proc: &HirProc) -> Result<TypedProc, Typeck
         &mut next_local_id,
         &proc.body,
         &return_type,
+        0,
     )?;
 
     check_return_flow(proc, &return_type, &body)?;
@@ -422,23 +449,38 @@ fn check_block(
     next_local_id: &mut u32,
     block: &HirBlock,
     expected_return: &TypedTypeRef,
+    loop_depth: u32,
 ) -> Result<TypedBlock, TypeckError> {
     let mut stmts = Vec::new();
+    let mut flow = Flow::MayContinue;
 
     for stmt in &block.stmts {
-        stmts.push(check_stmt(
+        if flow.stops_local_execution() {
+            return Err(TypeckError::UnreachableStatement { span: stmt.span });
+        }
+
+        let stmt = check_stmt(
             symbols,
             locals,
             next_local_id,
             stmt,
             expected_return,
-        )?);
+            loop_depth,
+        )?;
+        flow = stmt_flow(&stmt);
+        stmts.push(stmt);
     }
 
     let tail = block
         .tail
         .as_ref()
-        .map(|expr| check_tail_expr(symbols, locals, expected_return, expr))
+        .map(|expr| {
+            if flow.stops_local_execution() {
+                return Err(TypeckError::UnreachableStatement { span: expr.span });
+            }
+
+            check_tail_expr(symbols, locals, expected_return, expr)
+        })
         .transpose()?;
 
     Ok(TypedBlock {
@@ -454,6 +496,7 @@ fn check_stmt(
     next_local_id: &mut u32,
     stmt: &HirStmt,
     expected_return: &TypedTypeRef,
+    loop_depth: u32,
 ) -> Result<TypedStmt, TypeckError> {
     match &stmt.kind {
         HirStmtKind::Local {
@@ -487,6 +530,7 @@ fn check_stmt(
             locals,
             next_local_id,
             expected_return,
+            loop_depth,
             IfStmt {
                 condition,
                 then_block,
@@ -496,6 +540,47 @@ fn check_stmt(
         ),
         HirStmtKind::Return(expr) => {
             check_return_stmt(symbols, locals, expected_return, expr, stmt.span)
+        }
+        HirStmtKind::While { condition, body } => check_while_stmt(
+            symbols,
+            locals,
+            next_local_id,
+            expected_return,
+            loop_depth,
+            WhileStmt {
+                condition,
+                body,
+                stmt_span: stmt.span,
+            },
+        ),
+        HirStmtKind::Loop { body } => check_loop_stmt(
+            symbols,
+            locals,
+            next_local_id,
+            expected_return,
+            loop_depth,
+            body,
+            stmt.span,
+        ),
+        HirStmtKind::Break => {
+            if loop_depth == 0 {
+                return Err(TypeckError::BreakOutsideLoop { span: stmt.span });
+            }
+
+            Ok(TypedStmt {
+                kind: TypedStmtKind::Break,
+                span: stmt.span,
+            })
+        }
+        HirStmtKind::Continue => {
+            if loop_depth == 0 {
+                return Err(TypeckError::ContinueOutsideLoop { span: stmt.span });
+            }
+
+            Ok(TypedStmt {
+                kind: TypedStmtKind::Continue,
+                span: stmt.span,
+            })
         }
     }
 }
@@ -605,6 +690,7 @@ fn check_if_stmt(
     locals: &mut HashMap<String, LocalSymbol>,
     next_local_id: &mut u32,
     expected_return: &TypedTypeRef,
+    loop_depth: u32,
     stmt: IfStmt<'_>,
 ) -> Result<TypedStmt, TypeckError> {
     let condition = check_expr(symbols, locals, stmt.condition)?;
@@ -625,6 +711,7 @@ fn check_if_stmt(
         next_local_id,
         stmt.then_block,
         expected_return,
+        loop_depth,
     )?;
     let else_block = stmt
         .else_block
@@ -636,6 +723,7 @@ fn check_if_stmt(
                 next_local_id,
                 else_block,
                 expected_return,
+                loop_depth,
             )
         })
         .transpose()?;
@@ -647,6 +735,66 @@ fn check_if_stmt(
             else_block,
         },
         span: stmt.stmt_span,
+    })
+}
+
+fn check_while_stmt(
+    symbols: &SymbolTable,
+    locals: &mut HashMap<String, LocalSymbol>,
+    next_local_id: &mut u32,
+    expected_return: &TypedTypeRef,
+    loop_depth: u32,
+    stmt: WhileStmt<'_>,
+) -> Result<TypedStmt, TypeckError> {
+    let condition = check_expr(symbols, locals, stmt.condition)?;
+    let condition_type = expr_type(&condition);
+    let bool_type = symbols.builtin_type("Bool");
+
+    if condition_type != bool_type {
+        return Err(TypeckError::WhileConditionTypeMismatch {
+            found: symbols.type_name(condition_type),
+            span: condition.span,
+        });
+    }
+
+    let mut body_locals = locals.clone();
+    let body = check_block(
+        symbols,
+        &mut body_locals,
+        next_local_id,
+        stmt.body,
+        expected_return,
+        loop_depth + 1,
+    )?;
+
+    Ok(TypedStmt {
+        kind: TypedStmtKind::While { condition, body },
+        span: stmt.stmt_span,
+    })
+}
+
+fn check_loop_stmt(
+    symbols: &SymbolTable,
+    locals: &mut HashMap<String, LocalSymbol>,
+    next_local_id: &mut u32,
+    expected_return: &TypedTypeRef,
+    loop_depth: u32,
+    body: &HirBlock,
+    stmt_span: Span,
+) -> Result<TypedStmt, TypeckError> {
+    let mut body_locals = locals.clone();
+    let body = check_block(
+        symbols,
+        &mut body_locals,
+        next_local_id,
+        body,
+        expected_return,
+        loop_depth + 1,
+    )?;
+
+    Ok(TypedStmt {
+        kind: TypedStmtKind::Loop { body },
+        span: stmt_span,
     })
 }
 
@@ -987,15 +1135,24 @@ enum Flow {
     MayContinue,
     AlwaysReturns,
     CompletesWithValue(TypeId),
+    AlwaysBreaks,
+    AlwaysContinues,
+    AlwaysJumps,
+    AlwaysDiverges,
 }
 
 impl Flow {
     fn satisfies_return(self, expected: TypeId) -> bool {
         match self {
             Self::MayContinue => false,
-            Self::AlwaysReturns => true,
+            Self::AlwaysReturns | Self::AlwaysDiverges => true,
             Self::CompletesWithValue(found) => found == expected,
+            Self::AlwaysBreaks | Self::AlwaysContinues | Self::AlwaysJumps => false,
         }
+    }
+
+    const fn stops_local_execution(self) -> bool {
+        !matches!(self, Self::MayContinue)
     }
 }
 
@@ -1003,7 +1160,11 @@ fn block_flow(block: &TypedBlock) -> Flow {
     for (index, stmt) in block.stmts.iter().enumerate() {
         match stmt_flow(stmt) {
             Flow::MayContinue => {}
-            Flow::AlwaysReturns => return Flow::AlwaysReturns,
+            flow @ (Flow::AlwaysReturns
+            | Flow::AlwaysBreaks
+            | Flow::AlwaysContinues
+            | Flow::AlwaysJumps
+            | Flow::AlwaysDiverges) => return flow,
             flow @ Flow::CompletesWithValue(_) if index + 1 == block.stmts.len() => return flow,
             Flow::CompletesWithValue(_) => {}
         }
@@ -1019,20 +1180,30 @@ fn block_flow(block: &TypedBlock) -> Flow {
 fn stmt_flow(stmt: &TypedStmt) -> Flow {
     match &stmt.kind {
         TypedStmtKind::Return(_) => Flow::AlwaysReturns,
+        TypedStmtKind::Break => Flow::AlwaysBreaks,
+        TypedStmtKind::Continue => Flow::AlwaysContinues,
         TypedStmtKind::If {
             then_block,
             else_block: Some(else_block),
             ..
         } => combine_branch_flow(block_flow(then_block), block_flow(else_block)),
-        TypedStmtKind::Local { .. } | TypedStmtKind::Assign { .. } | TypedStmtKind::If { .. } => {
-            Flow::MayContinue
-        }
+        TypedStmtKind::Loop { body } if block_has_direct_break(body) => Flow::MayContinue,
+        TypedStmtKind::Loop { body } => match block_flow(body) {
+            Flow::AlwaysReturns => Flow::AlwaysReturns,
+            _ => Flow::AlwaysDiverges,
+        },
+        TypedStmtKind::Local { .. }
+        | TypedStmtKind::Assign { .. }
+        | TypedStmtKind::If { .. }
+        | TypedStmtKind::While { .. } => Flow::MayContinue,
     }
 }
 
 fn combine_branch_flow(then_flow: Flow, else_flow: Flow) -> Flow {
     match (then_flow, else_flow) {
         (Flow::AlwaysReturns, Flow::AlwaysReturns) => Flow::AlwaysReturns,
+        (Flow::AlwaysBreaks, Flow::AlwaysBreaks) => Flow::AlwaysBreaks,
+        (Flow::AlwaysContinues, Flow::AlwaysContinues) => Flow::AlwaysContinues,
         (Flow::CompletesWithValue(then_ty), Flow::CompletesWithValue(else_ty))
             if then_ty == else_ty =>
         {
@@ -1040,7 +1211,36 @@ fn combine_branch_flow(then_flow: Flow, else_flow: Flow) -> Flow {
         }
         (Flow::AlwaysReturns, Flow::CompletesWithValue(ty))
         | (Flow::CompletesWithValue(ty), Flow::AlwaysReturns) => Flow::CompletesWithValue(ty),
+        (then_flow, else_flow)
+            if then_flow.stops_local_execution() && else_flow.stops_local_execution() =>
+        {
+            Flow::AlwaysJumps
+        }
         _ => Flow::MayContinue,
+    }
+}
+
+fn block_has_direct_break(block: &TypedBlock) -> bool {
+    block.stmts.iter().any(stmt_has_direct_break)
+}
+
+fn stmt_has_direct_break(stmt: &TypedStmt) -> bool {
+    match &stmt.kind {
+        TypedStmtKind::Break => true,
+        TypedStmtKind::If {
+            then_block,
+            else_block,
+            ..
+        } => {
+            block_has_direct_break(then_block)
+                || else_block.as_ref().is_some_and(block_has_direct_break)
+        }
+        TypedStmtKind::Local { .. }
+        | TypedStmtKind::Assign { .. }
+        | TypedStmtKind::While { .. }
+        | TypedStmtKind::Loop { .. }
+        | TypedStmtKind::Continue
+        | TypedStmtKind::Return(_) => false,
     }
 }
 
@@ -1176,6 +1376,18 @@ mod tests {
                 ..
             } if left == "Int32" && right == "Bool"
         ));
+    }
+
+    #[test]
+    fn checks_diverging_loop_satisfies_return_flow() {
+        check_source("Int32", "loop { continue; }").expect("diverging loop should pass");
+    }
+
+    #[test]
+    fn rejects_unreachable_after_return() {
+        let err = check_source("Int32", "return 1; 2").expect_err("unreachable tail should fail");
+
+        assert!(matches!(err, TypeckError::UnreachableStatement { .. }));
     }
 
     fn checked_tail(return_type: &str, body: &str) -> TypedExpr {

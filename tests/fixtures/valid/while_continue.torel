@@ -1,0 +1,9 @@
+unit fixtures.while_continue;
+
+export proc main() -> Int32 {
+    while true {
+        continue;
+    }
+
+    42
+}

@@ -1,0 +1,8 @@
+unit fixtures.unreachable_after_continue;
+
+export proc main() -> Int32 {
+    loop {
+        continue;
+        fix answer: Int32 = 7;
+    }
+}

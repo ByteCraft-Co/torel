@@ -1,0 +1,9 @@
+unit fixtures.loop_break_then_tail;
+
+export proc main() -> Int32 {
+    loop {
+        break;
+    }
+
+    42
+}

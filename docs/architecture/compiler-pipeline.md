@@ -37,7 +37,7 @@ source
 The pipeline is executable but intentionally skeletal:
 
 - the lexer recognizes the first core tokens needed by examples
-- the parser accepts a `unit` declaration, the first top-level `proc` shape, `fix`/`slot` bindings, assignment statements, `if`/`else` statements, returns, final block expressions, paths, literals, procedure calls, parenthesized expressions, and unary/binary operators with Pratt-parsed precedence
+- the parser accepts a `unit` declaration, the first top-level `proc` shape, `fix`/`slot` bindings, assignment statements, `if`/`else` statements, `while` loops, unconditional `loop` blocks, `break`/`continue`, returns, final block expressions, paths, literals, procedure calls, parenthesized expressions, and unary/binary operators with Pratt-parsed precedence
 - AST, HIR, and typed IR preserve source spans for diagnostic reporting
 - HIR preserves unit identity and procedure structure
 - type checking has built-in symbols for `Exit`, `Void`, `Bool`, `Int32`, `UInt64`, `Text`, `Never`, and `Exit.ok`
@@ -49,6 +49,8 @@ The pipeline is executable but intentionally skeletal:
 - `fix` and `slot` bindings resolve declared types, check initializer types, and add locals for later statements
 - assignments resolve mutable local targets and check assigned expression types
 - `if`/`else` statements require `Bool` conditions, type-check branch blocks, keep branch-local bindings scoped to their branch, and participate in guaranteed-return analysis
+- `while` conditions require `Bool`, loop bodies get scoped locals, `break`/`continue` require an enclosing loop, and unconditional `loop` participates in flow analysis
+- unreachable statements after terminating control flow are rejected with source-labelled diagnostics
 - block tail expressions type-check as procedure results and let a block complete with a value without an explicit `return`
 - the first semantic checks reject unknown types, unknown locals, duplicate locals, assignment to immutable locals, invalid assignment targets, bad assignment values, non-`Bool` conditions, unknown value paths, unknown procedure calls, non-callable values, bad argument counts, bad argument types, bare procedure values, bad local initializers, bad explicit and final-expression return types, and missing guaranteed returns from non-`Void` procedures
 - parser and type-checking errors render with file, line, column, source text, and an underline label

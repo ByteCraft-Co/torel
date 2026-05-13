@@ -191,6 +191,26 @@ impl Parser<'_, '_> {
         } else if self.at_keyword(Keyword::If) {
             let start = self.expect_keyword(Keyword::If)?;
             self.if_stmt(start)
+        } else if self.at_keyword(Keyword::While) {
+            let start = self.expect_keyword(Keyword::While)?;
+            self.while_stmt(start)
+        } else if self.at_keyword(Keyword::Loop) {
+            let start = self.expect_keyword(Keyword::Loop)?;
+            self.loop_stmt(start)
+        } else if self.at_keyword(Keyword::Break) {
+            let start = self.expect_keyword(Keyword::Break)?;
+            let end = self.expect(TokenKind::Semicolon)?;
+            Ok(Stmt {
+                kind: StmtKind::Break,
+                span: start.join(end),
+            })
+        } else if self.at_keyword(Keyword::Continue) {
+            let start = self.expect_keyword(Keyword::Continue)?;
+            let end = self.expect(TokenKind::Semicolon)?;
+            Ok(Stmt {
+                kind: StmtKind::Continue,
+                span: start.join(end),
+            })
         } else if self.at_keyword(Keyword::Return) {
             let start = self.expect_keyword(Keyword::Return)?;
             let expr = self.expr()?;
@@ -252,6 +272,27 @@ impl Parser<'_, '_> {
                 else_block,
             },
             span: start.join(end),
+        })
+    }
+
+    fn while_stmt(&mut self, start: Span) -> Result<Stmt, ParseError> {
+        let condition = self.expr()?;
+        let body = self.block()?;
+        let span = start.join(body.span);
+
+        Ok(Stmt {
+            kind: StmtKind::While { condition, body },
+            span,
+        })
+    }
+
+    fn loop_stmt(&mut self, start: Span) -> Result<Stmt, ParseError> {
+        let body = self.block()?;
+        let span = start.join(body.span);
+
+        Ok(Stmt {
+            kind: StmtKind::Loop { body },
+            span,
         })
     }
 
@@ -436,6 +477,10 @@ impl Parser<'_, '_> {
         self.at_keyword(Keyword::Fix)
             || self.at_keyword(Keyword::Slot)
             || self.at_keyword(Keyword::If)
+            || self.at_keyword(Keyword::While)
+            || self.at_keyword(Keyword::Loop)
+            || self.at_keyword(Keyword::Break)
+            || self.at_keyword(Keyword::Continue)
             || self.at_keyword(Keyword::Return)
             || self.path_is_followed_by_equal()
     }
@@ -853,6 +898,31 @@ mod tests {
                 ..
             }
         ));
+    }
+
+    #[test]
+    fn parses_while_loop_break_and_continue() {
+        let tokens = lex(r#"
+            unit app.loops;
+
+            export proc main() -> Int32 {
+                while true {
+                    break;
+                    continue;
+                }
+
+                loop {
+                    break;
+                }
+
+                42
+            }
+            "#);
+        let file = parse_source_file(&tokens).expect("source file should parse");
+        let Item::Proc(proc) = &file.items[0];
+
+        assert!(matches!(proc.body.stmts[0].kind, StmtKind::While { .. }));
+        assert!(matches!(proc.body.stmts[1].kind, StmtKind::Loop { .. }));
     }
 
     fn parse_tail_expr(source: &str) -> Expr {

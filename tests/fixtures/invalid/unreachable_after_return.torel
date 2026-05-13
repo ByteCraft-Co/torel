@@ -1,0 +1,6 @@
+unit fixtures.unreachable_after_return;
+
+export proc main() -> Int32 {
+    return 42;
+    fix answer: Int32 = 7;
+}

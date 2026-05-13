@@ -102,6 +102,15 @@ pub enum HirStmtKind {
         then_block: HirBlock,
         else_block: Option<HirBlock>,
     },
+    While {
+        condition: HirExpr,
+        body: HirBlock,
+    },
+    Loop {
+        body: HirBlock,
+    },
+    Break,
+    Continue,
     Return(HirExpr),
 }
 
@@ -237,6 +246,15 @@ pub enum TypedStmtKind {
         then_block: TypedBlock,
         else_block: Option<TypedBlock>,
     },
+    While {
+        condition: TypedExpr,
+        body: TypedBlock,
+    },
+    Loop {
+        body: TypedBlock,
+    },
+    Break,
+    Continue,
     Return(TypedExpr),
 }
 
@@ -377,6 +395,15 @@ fn lower_stmt(stmt: &Stmt) -> HirStmt {
             then_block: lower_block(then_block),
             else_block: else_block.as_ref().map(lower_block),
         },
+        StmtKind::While { condition, body } => HirStmtKind::While {
+            condition: lower_expr(condition),
+            body: lower_block(body),
+        },
+        StmtKind::Loop { body } => HirStmtKind::Loop {
+            body: lower_block(body),
+        },
+        StmtKind::Break => HirStmtKind::Break,
+        StmtKind::Continue => HirStmtKind::Continue,
         StmtKind::Return(expr) => HirStmtKind::Return(lower_expr(expr)),
     };
 

@@ -1,0 +1,7 @@
+unit fixtures.loop_return;
+
+export proc main() -> Int32 {
+    loop {
+        return 42;
+    }
+}

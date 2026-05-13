@@ -1,0 +1,10 @@
+unit fixtures.unreachable_after_break;
+
+export proc main() -> Int32 {
+    loop {
+        break;
+        fix answer: Int32 = 7;
+    }
+
+    42
+}

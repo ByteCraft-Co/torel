@@ -1,0 +1,9 @@
+unit fixtures.while_condition_not_bool;
+
+export proc main() -> Int32 {
+    while 1 {
+        return 42;
+    }
+
+    0
+}
