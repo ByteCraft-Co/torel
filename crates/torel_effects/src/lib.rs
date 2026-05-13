@@ -25,12 +25,12 @@ pub enum FailureError {
 
 pub fn check_effects(module: &TypedModule) -> Result<EffectReport, EffectError> {
     Ok(EffectReport {
-        checked_effect_sets: module.item_count,
+        checked_effect_sets: module.procs.len(),
     })
 }
 
 pub fn check_failures(module: &TypedModule) -> Result<FailureReport, FailureError> {
     Ok(FailureReport {
-        checked_failure_sets: module.item_count,
+        checked_failure_sets: module.procs.len(),
     })
 }

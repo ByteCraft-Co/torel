@@ -14,6 +14,6 @@ pub enum OwnershipError {
 
 pub fn check_ownership(module: &TypedModule) -> Result<OwnershipReport, OwnershipError> {
     Ok(OwnershipReport {
-        checked_owner_regions: module.item_count,
+        checked_owner_regions: module.procs.len(),
     })
 }

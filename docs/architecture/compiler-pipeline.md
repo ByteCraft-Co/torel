@@ -33,7 +33,7 @@ The pipeline is executable but intentionally skeletal:
 
 - the lexer recognizes the first core tokens needed by examples
 - the parser accepts a `unit` declaration and the first top-level `proc` shape
-- HIR and typed IR preserve unit identity and item counts
+- HIR and typed IR preserve unit identity and procedure structure
 - type/effect/failure/ownership stages return reports
 - codegen supports a check-only summary and reserves LLVM IR for the next backend phase
 

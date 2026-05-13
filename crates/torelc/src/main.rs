@@ -29,7 +29,14 @@ enum Emit {
     LlvmIr,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() {
+    if let Err(err) = run() {
+        eprintln!("error: {err}");
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let source = fs::read_to_string(&cli.input)?;
     let tokens = lex(&source);

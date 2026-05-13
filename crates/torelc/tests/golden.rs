@@ -73,4 +73,9 @@ fn rejects_trailing_junk_fixture() {
         "stderr should explain the parser failure:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("at 30..31"),
+        "stderr should include the junk token span:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

@@ -1,16 +1,20 @@
 use torel_ast::{
     Block, Expr, Item, Param, ProcDecl, SourceFile, Stmt, TypeRef, UnitDecl, Visibility,
 };
-use torel_lexer::{Keyword, Token, TokenKind};
+use torel_lexer::{Keyword, Span, Token, TokenKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParseError {
     pub message: String,
+    pub span: Option<Span>,
 }
 
 impl std::fmt::Display for ParseError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.message)
+        match self.span {
+            Some(span) => write!(f, "{} at {}..{}", self.message, span.start, span.end),
+            None => f.write_str(&self.message),
+        }
     }
 }
 
@@ -68,9 +72,7 @@ impl Parser<'_, '_> {
         if self.at_keyword(Keyword::Proc) {
             Ok(Item::Proc(self.proc_decl(visibility)?))
         } else {
-            Err(ParseError {
-                message: "expected top-level item".to_owned(),
-            })
+            Err(self.error_current("expected top-level item"))
         }
     }
 
@@ -125,9 +127,7 @@ impl Parser<'_, '_> {
 
         while !self.eat(TokenKind::RBrace) {
             if self.at_eof() {
-                return Err(ParseError {
-                    message: "expected statement or `}`".to_owned(),
-                });
+                return Err(self.error_current("expected statement or `}`"));
             }
 
             stmts.push(self.stmt()?);
@@ -142,9 +142,7 @@ impl Parser<'_, '_> {
             self.expect(TokenKind::Semicolon)?;
             Ok(Stmt::Return(expr))
         } else {
-            Err(ParseError {
-                message: "expected statement".to_owned(),
-            })
+            Err(self.error_current("expected statement"))
         }
     }
 
@@ -179,9 +177,7 @@ impl Parser<'_, '_> {
         if self.eat_keyword(keyword) {
             Ok(())
         } else {
-            Err(ParseError {
-                message: format!("expected keyword `{keyword:?}`"),
-            })
+            Err(self.error_current(format!("expected keyword `{keyword:?}`")))
         }
     }
 
@@ -192,9 +188,7 @@ impl Parser<'_, '_> {
                 self.cursor += 1;
                 Ok(name)
             }
-            _ => Err(ParseError {
-                message: "expected identifier".to_owned(),
-            }),
+            _ => Err(self.error_current("expected identifier")),
         }
     }
 
@@ -202,9 +196,7 @@ impl Parser<'_, '_> {
         if self.eat(kind.clone()) {
             Ok(())
         } else {
-            Err(ParseError {
-                message: format!("expected token `{kind:?}`"),
-            })
+            Err(self.error_current(format!("expected token `{kind:?}`")))
         }
     }
 
@@ -223,6 +215,17 @@ impl Parser<'_, '_> {
 
     fn at_eof(&self) -> bool {
         matches!(self.peek(), Some(TokenKind::Eof))
+    }
+
+    fn current_span(&self) -> Option<Span> {
+        self.tokens.get(self.cursor).map(|token| token.span)
+    }
+
+    fn error_current(&self, message: impl Into<String>) -> ParseError {
+        ParseError {
+            message: message.into(),
+            span: self.current_span(),
+        }
     }
 }
 
@@ -267,5 +270,6 @@ mod tests {
         let err = parse_source_file(&tokens).expect_err("trailing junk should fail");
 
         assert_eq!(err.message, "expected top-level item");
+        assert_eq!(err.span, Some(Span { start: 17, end: 18 }));
     }
 }
