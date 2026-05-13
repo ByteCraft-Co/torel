@@ -96,6 +96,11 @@ fn emits_hir_golden() {
 }
 
 #[test]
+fn emits_mir_golden() {
+    assert_emit_matches_golden("mir", include_str!("../../../tests/golden/hello.mir.txt"));
+}
+
+#[test]
 fn emits_operator_precedence_ast_golden() {
     assert_emit_file_matches_golden(
         "tests/fixtures/valid/operator_precedence.torel",

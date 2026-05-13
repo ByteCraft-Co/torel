@@ -45,6 +45,24 @@ Structured control flow is removed before MIR reaches a backend:
 - `break` lowers to a jump to the loop exit block
 - `continue` lowers to a jump to the loop continuation block
 
+## Current Lowering Scope
+
+The current MIR lowerer covers the typed IR subset already accepted by the compiler:
+
+- procedures and parameters
+- local immutable and mutable bindings
+- assignments
+- explicit returns and final-expression returns
+- direct calls
+- `Exit.ok`, integer, text, and boolean literals
+- unary and binary typed operators
+- `if` / `else`
+- `while`
+- unconditional `loop`
+- `break` and `continue` as loop jumps
+
+Native backends may still reject features they do not support, such as `Text` layout, but MIR can carry the checked program shape for inspection and future backend lowering.
+
 ## Type Contract
 
 MIR carries the type IDs produced by the Rust semantic pipeline. Backends consume those IDs and display names, but do not decide Torel language validity. A backend may reject unsupported MIR features, but it must not reinterpret language rules.

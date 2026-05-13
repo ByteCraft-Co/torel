@@ -1,11 +1,14 @@
 use std::{fs, path::PathBuf};
 
 use clap::{Parser, ValueEnum};
+use torel_backend::{Backend, BackendTarget};
 use torel_codegen::{CodegenTarget, codegen};
+use torel_codegen_llvm::LlvmBackend;
 use torel_diagnostics::FileId;
 use torel_effects::{check_effects, check_failures};
 use torel_ir::lower_ast;
 use torel_lexer::lex;
+use torel_mir::lower_to_mir;
 use torel_ownership::check_ownership;
 use torel_parse::parse_source_file;
 use torel_session::{SourceFile, render_diagnostic};
@@ -28,6 +31,8 @@ enum Emit {
     Tokens,
     Ast,
     Hir,
+    Typed,
+    Mir,
     LlvmIr,
 }
 
@@ -50,7 +55,7 @@ fn run() -> Result<(), String> {
                 println!("{:?} {:?}", token.span, token.kind);
             }
         }
-        Emit::Check | Emit::Ast | Emit::Hir | Emit::LlvmIr => {
+        Emit::Check | Emit::Ast | Emit::Hir | Emit::Typed | Emit::Mir | Emit::LlvmIr => {
             let ast = parse_source_file(&tokens)
                 .map_err(|err| render_diagnostic(&source_file, &err.into_diagnostic()))?;
 
@@ -68,18 +73,40 @@ fn run() -> Result<(), String> {
 
             let typed = check_types(&hir)
                 .map_err(|err| render_diagnostic(&source_file, &err.to_diagnostic()))?;
+
+            if matches!(cli.emit, Emit::Typed) {
+                println!("{typed:#?}");
+                return Ok(());
+            }
+
             let effects = check_effects(&typed).map_err(format_error)?;
             let failures = check_failures(&typed).map_err(format_error)?;
             let ownership = check_ownership(&typed).map_err(format_error)?;
-            let target = match cli.emit {
-                Emit::LlvmIr => CodegenTarget::LlvmIr,
-                _ => CodegenTarget::CheckOnly,
-            };
-            let output = codegen(&typed, target).map_err(format_error)?;
+            let mir = lower_to_mir(&typed)
+                .map_err(|err| render_diagnostic(&source_file, &err.to_diagnostic()))?;
+
+            if matches!(cli.emit, Emit::Mir) {
+                print!("{}", mir.pretty());
+                return Ok(());
+            }
+
+            if matches!(cli.emit, Emit::LlvmIr) {
+                let output = LlvmBackend
+                    .emit(&mir, BackendTarget::LlvmIr)
+                    .map_err(format_error)?;
+
+                if let Some(text) = output.text {
+                    print!("{text}");
+                }
+
+                return Ok(());
+            }
+
+            let output = codegen(&typed, CodegenTarget::CheckOnly).map_err(format_error)?;
 
             println!("{}", output.text);
             println!(
-                "pipeline: source -> lexer -> parser -> AST -> HIR -> name resolution -> typed IR -> type/return checks -> effect/failure/ownership checks -> codegen"
+                "pipeline: source -> lexer -> parser -> AST -> HIR -> name resolution -> typed IR -> type/return checks -> effect/failure/ownership checks -> MIR -> MIR validation -> codegen"
             );
             println!(
                 "checks: types={} effects={} failures={} ownership_regions={}",

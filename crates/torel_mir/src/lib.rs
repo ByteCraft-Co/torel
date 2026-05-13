@@ -6,6 +6,10 @@ use torel_ir::{
     IntOverflowMode, LocalId, Mutability, ProcId, TypeId, TypedBinaryOp, TypedUnaryOp, ValueId,
 };
 
+mod lower;
+
+pub use lower::{MirLowerError, lower_to_mir};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MirModule {
     pub unit_path: Option<Vec<String>>,
@@ -144,6 +148,7 @@ impl MirPlace {
 pub enum MirOperand {
     Place(MirPlace),
     Int32(String),
+    Text(String),
     Bool(bool),
     BuiltinValue {
         id: ValueId,
@@ -159,6 +164,7 @@ impl MirOperand {
         match self {
             Self::Place(place) => place.pretty(),
             Self::Int32(value) => value.clone(),
+            Self::Text(value) => value.clone(),
             Self::Bool(value) => value.to_string(),
             Self::BuiltinValue { name, .. } => name.clone(),
             Self::Unit => "()".to_owned(),
@@ -422,6 +428,13 @@ pub enum MirValidationError {
     #[error("MIR assignment in `{function}` writes immutable local %{local}")]
     ImmutableLocalAssigned { function: String, local: u32 },
 
+    #[error("MIR assignment in `{function}` expected `{expected}`, found `{found}`")]
+    AssignmentTypeMismatch {
+        function: String,
+        expected: String,
+        found: String,
+    },
+
     #[error("MIR call in `{function}` targets unknown procedure proc{proc}")]
     UnknownProc { function: String, proc: u32 },
 }
@@ -434,8 +447,8 @@ pub fn validate_module(module: &MirModule) -> Result<(), MirValidationError> {
     let procs = module
         .functions
         .iter()
-        .map(|function| function.id)
-        .collect::<HashSet<_>>();
+        .map(|function| (function.id, function.return_type.clone()))
+        .collect::<HashMap<_, _>>();
 
     for function in &module.functions {
         validate_function(function, &procs)?;
@@ -446,7 +459,7 @@ pub fn validate_module(module: &MirModule) -> Result<(), MirValidationError> {
 
 fn validate_function(
     function: &MirFunction,
-    procs: &HashSet<ProcId>,
+    procs: &HashMap<ProcId, MirType>,
 ) -> Result<(), MirValidationError> {
     let mut blocks = HashSet::new();
 
@@ -527,7 +540,7 @@ struct ValidationState<'a> {
     assigned_locals: &'a mut HashSet<LocalId>,
     temp_types: &'a HashMap<MirTempId, MirType>,
     defined_temps: &'a mut HashSet<MirTempId>,
-    procs: &'a HashSet<ProcId>,
+    procs: &'a HashMap<ProcId, MirType>,
 }
 
 fn validate_statement(
@@ -537,7 +550,7 @@ fn validate_statement(
 ) -> Result<(), MirValidationError> {
     match &statement.kind {
         MirStatementKind::Assign { target, value } => {
-            validate_rvalue(
+            let found = rvalue_type(
                 function,
                 value,
                 state.local_types,
@@ -545,6 +558,16 @@ fn validate_statement(
                 state.defined_temps,
                 state.procs,
             )?;
+            let expected =
+                place_declared_type(function, *target, state.local_types, state.temp_types)?;
+
+            if expected.id != found.id {
+                return Err(MirValidationError::AssignmentTypeMismatch {
+                    function: function.name.clone(),
+                    expected: expected.display_name,
+                    found: found.display_name,
+                });
+            }
 
             match target {
                 MirPlace::Local(id) => {
@@ -588,35 +611,59 @@ fn validate_statement(
     Ok(())
 }
 
-fn validate_rvalue(
+fn rvalue_type(
     function: &MirFunction,
     value: &MirRvalue,
     local_types: &HashMap<LocalId, MirType>,
     temp_types: &HashMap<MirTempId, MirType>,
     defined_temps: &HashSet<MirTempId>,
-    procs: &HashSet<ProcId>,
-) -> Result<(), MirValidationError> {
+    procs: &HashMap<ProcId, MirType>,
+) -> Result<MirType, MirValidationError> {
     match value {
-        MirRvalue::Use(operand) | MirRvalue::Unary { arg: operand, .. } => {
-            validate_operand(function, operand, local_types, temp_types, defined_temps)
+        MirRvalue::Use(operand) => {
+            operand_type(function, operand, local_types, temp_types, defined_temps)
         }
-        MirRvalue::Binary { lhs, rhs, .. } => {
+        MirRvalue::Unary { op, arg } => {
+            validate_operand(function, arg, local_types, temp_types, defined_temps)?;
+            Ok(match op {
+                MirUnaryOp::BoolNot => bool_type(),
+                MirUnaryOp::IntNeg { .. } => int32_type(),
+            })
+        }
+        MirRvalue::Binary { op, lhs, rhs } => {
             validate_operand(function, lhs, local_types, temp_types, defined_temps)?;
-            validate_operand(function, rhs, local_types, temp_types, defined_temps)
+            validate_operand(function, rhs, local_types, temp_types, defined_temps)?;
+            Ok(match op {
+                MirBinaryOp::IntAdd { .. }
+                | MirBinaryOp::IntSub { .. }
+                | MirBinaryOp::IntMul { .. }
+                | MirBinaryOp::IntDiv
+                | MirBinaryOp::IntRem => int32_type(),
+                MirBinaryOp::IntEq
+                | MirBinaryOp::IntNotEq
+                | MirBinaryOp::IntLt
+                | MirBinaryOp::IntLtEq
+                | MirBinaryOp::IntGt
+                | MirBinaryOp::IntGtEq
+                | MirBinaryOp::BoolAnd
+                | MirBinaryOp::BoolOr
+                | MirBinaryOp::SameTypeEq
+                | MirBinaryOp::SameTypeNotEq => bool_type(),
+            })
         }
         MirRvalue::Call { callee, args } => {
-            if !procs.contains(callee) {
+            let Some(return_type) = procs.get(callee) else {
                 return Err(MirValidationError::UnknownProc {
                     function: function.name.clone(),
                     proc: callee.0,
                 });
-            }
+            };
 
             for arg in args {
                 validate_operand(function, arg, local_types, temp_types, defined_temps)?;
             }
 
-            Ok(())
+            Ok(return_type.clone())
         }
     }
 }
@@ -704,6 +751,34 @@ fn validate_operand(
     operand_type(function, operand, local_types, temp_types, defined_temps).map(drop)
 }
 
+fn place_declared_type(
+    function: &MirFunction,
+    place: MirPlace,
+    local_types: &HashMap<LocalId, MirType>,
+    temp_types: &HashMap<MirTempId, MirType>,
+) -> Result<MirType, MirValidationError> {
+    match place {
+        MirPlace::Local(id) => {
+            local_types
+                .get(&id)
+                .cloned()
+                .ok_or_else(|| MirValidationError::UnknownLocal {
+                    function: function.name.clone(),
+                    local: id.0,
+                })
+        }
+        MirPlace::Temp(id) => {
+            temp_types
+                .get(&id)
+                .cloned()
+                .ok_or_else(|| MirValidationError::UnknownTemp {
+                    function: function.name.clone(),
+                    temp: id.0,
+                })
+        }
+    }
+}
+
 fn operand_type(
     function: &MirFunction,
     operand: &MirOperand,
@@ -737,19 +812,31 @@ fn operand_type(
                     temp: id.0,
                 })
         }
-        MirOperand::Int32(_) => Ok(MirType {
-            id: TypeId(3),
-            display_name: "Int32".to_owned(),
+        MirOperand::Int32(_) => Ok(int32_type()),
+        MirOperand::Text(_) => Ok(MirType {
+            id: TypeId(5),
+            display_name: "Text".to_owned(),
         }),
-        MirOperand::Bool(_) => Ok(MirType {
-            id: TypeId(2),
-            display_name: "Bool".to_owned(),
-        }),
+        MirOperand::Bool(_) => Ok(bool_type()),
         MirOperand::BuiltinValue { ty, .. } => Ok(ty.clone()),
         MirOperand::Unit => Ok(MirType {
             id: TypeId(1),
             display_name: "Void".to_owned(),
         }),
+    }
+}
+
+fn bool_type() -> MirType {
+    MirType {
+        id: TypeId(2),
+        display_name: "Bool".to_owned(),
+    }
+}
+
+fn int32_type() -> MirType {
+    MirType {
+        id: TypeId(3),
+        display_name: "Int32".to_owned(),
     }
 }
 

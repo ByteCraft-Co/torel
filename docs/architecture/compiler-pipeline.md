@@ -58,10 +58,13 @@ The pipeline is executable but intentionally skeletal:
 - `while` conditions require `Bool`, loop bodies get scoped locals, `break`/`continue` require an enclosing loop, and unconditional `loop` participates in flow analysis
 - unreachable statements after terminating control flow are rejected with source-labelled diagnostics
 - block tail expressions type-check as procedure results and let a block complete with a value without an explicit `return`
+- typed IR lowers into Torel MIR with explicit blocks, jumps, branches, returns, unreachable terminators, locals, temps, calls, and primitive operations
+- structured `if`, `while`, `loop`, `break`, and `continue` are gone by the MIR boundary
+- MIR validation checks entry blocks, block terminators, targets, branch condition types, return types, local/temp references, temp definition, local mutability, assignment types, and call targets
 - the first semantic checks reject unknown types, unknown locals, duplicate locals, assignment to immutable locals, invalid assignment targets, bad assignment values, non-`Bool` conditions, unknown value paths, unknown procedure calls, non-callable values, bad argument counts, bad argument types, bare procedure values, bad local initializers, bad explicit and final-expression return types, and missing guaranteed returns from non-`Void` procedures
 - parser and type-checking errors render with file, line, column, source text, and an underline label
 - type/effect/failure/ownership stages return reports
-- MIR and backend crates exist as the boundary for the next lowering phase
+- `--emit typed` and `--emit mir` expose the typed and MIR stages
 - codegen supports a check-only summary and reserves LLVM IR for the backend phase
 
 This lets `torelc` exercise the final shape from day one:
@@ -71,6 +74,8 @@ cargo run -p torelc -- examples\hello.torel --emit check
 cargo run -p torelc -- examples\hello.torel --emit tokens
 cargo run -p torelc -- examples\hello.torel --emit ast
 cargo run -p torelc -- examples\hello.torel --emit hir
+cargo run -p torelc -- examples\hello.torel --emit typed
+cargo run -p torelc -- examples\hello.torel --emit mir
 ```
 
 ## Design Rules

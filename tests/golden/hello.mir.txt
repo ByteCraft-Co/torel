@@ -1,0 +1,6 @@
+mir module examples.hello
+
+fn main() -> Exit {
+  bb0:
+    return Exit.ok
+}

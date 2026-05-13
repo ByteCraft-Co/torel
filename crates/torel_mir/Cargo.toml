@@ -10,3 +10,8 @@ rust-version.workspace = true
 thiserror.workspace = true
 torel_diagnostics.workspace = true
 torel_ir.workspace = true
+
+[dev-dependencies]
+torel_lexer.workspace = true
+torel_parse.workspace = true
+torel_typeck.workspace = true
